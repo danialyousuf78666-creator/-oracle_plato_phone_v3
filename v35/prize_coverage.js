@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-1';
+const VERSION='3.5-prize-coverage-2-root';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
@@ -49,6 +49,7 @@ function candidateTicket(pool,cfg,target,usage,pairs,triples,rng){
 }
 
 function portfolio(game,count){
+  if(!GAME_CFG[game]||!Number.isInteger(count)||count<1||count>100)throw new Error('Choose 1–100 whole tickets.');
   if(!window.PLATO_V35||!PLATO_V35.rank)throw new Error('v3.5 engine is not ready. Reload once.');
   const cfg=GAME_CFG[game],ranked=PLATO_V35.rank(game),k=coveragePoolK(game,count),pool=ranked.out.slice(0,k);
   const scores=pool.map((x,i)=>Math.max(0.001,x.score||0.001));
@@ -98,32 +99,37 @@ function formatTicket(game,ticket,i,seed){
   return game==='pb'?`${main}   PB ${String(powerballFor(i,seed)).padStart(2,'0')}`:main;
 }
 
-function run(){
-  const game=document.getElementById('v35Game').value;
-  const count=clamp(parseInt(document.getElementById('v35Count').value||'20',10),1,100);
-  const btn=document.getElementById('v35Generate');btn.disabled=true;btn.textContent='Generating…';
+async function run(event){
+  if(event)event.preventDefault();
+  const form=document.getElementById('v35Form');if(!form.reportValidity())return;
+  const game=document.getElementById('v35Game').value,count=Number(document.getElementById('v35Count').value);
+  const btn=document.getElementById('v35Generate'),summary=document.getElementById('v35Summary'),output=document.getElementById('v35Tickets');
+  if(btn.disabled)return;btn.disabled=true;btn.textContent='Generating…';summary.textContent='';output.replaceChildren();
+  await new Promise(resolve=>setTimeout(resolve,0));
   try{
     const res=portfolio(game,count),seed=gameSeed(game,count,res.ranked.rows);
-    const usageVals=Object.values(res.usage),minUse=Math.min(...usageVals),maxUse=Math.max(...usageVals);
-    document.getElementById('v35Summary').innerHTML=`<div class="stats"><div><b>${res.ranked.rows.length}</b><span>historical draws used</span></div><div><b>${res.k}</b><span>automatic pool</span></div><div><b>${res.tickets.length}</b><span>unique tickets</span></div></div><h3>Candidate pool</h3><div class="pool">${res.pool.map(x=>`<span>${String(x).padStart(2,'0')}</span>`).join('')}</div><p class="muted">Prize Coverage Mode softens concentration: candidate usage ranges ${minUse}–${maxUse} appearances across this portfolio while pair/triple repetition is penalized.</p>`;
-    document.getElementById('v35Tickets').innerHTML=res.tickets.map((t,i)=>`<div class="ticket"><b>${String(i+1).padStart(2,'0')}.</b> ${formatTicket(game,t,i,seed)}</div>`).join('');
-    localStorage.setItem(STORE,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),game,count,pool:res.pool,tickets:res.tickets}));
-  }catch(e){document.getElementById('v35Tickets').innerHTML=`<div class="error">${String(e.message||e)}</div>`}
-  finally{btn.disabled=false;btn.textContent='Generate v3.5'}
+    if(res.tickets.length!==count)throw new Error('Could not complete this ticket count. Try a smaller count.');
+    summary.textContent=`${GAME_CFG[game].name} · ${res.tickets.length} tickets`;
+    const fragment=document.createDocumentFragment();
+    res.tickets.forEach((ticket,i)=>{const item=document.createElement('li');item.className='ticket';item.textContent=formatTicket(game,ticket,i,seed);fragment.appendChild(item);});
+    output.appendChild(fragment);
+    output.dataset.historyTotal=String(res.ranked.history.total);
+    output.dataset.rawDraws=String(res.ranked.history.raw);
+    output.dataset.structuralDraws=String(res.ranked.history.structural);
+    output.dataset.eras=JSON.stringify(res.ranked.history.eras);
+    try{localStorage.setItem(STORE,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),game,count,
+      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history}));}catch(_){ }
+    // Read-only diagnostic state for audit; never exposed as phone controls.
+    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets};
+  }catch(error){summary.textContent=String(error.message||error);}
+  finally{btn.disabled=false;btn.textContent='Generate v3.5';}
 }
-
-function render(){
-  document.title='ORACLE / PLATO v3.5';
-  const style=document.createElement('style');
-  style.textContent=`:root{--bg:#0b0c0e;--card:#15181c;--card2:#0f1114;--text:#f4f6f8;--muted:#9da5af;--line:#2a3038}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header{padding:max(20px,env(safe-area-inset-top)) 18px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,12,14,.96);backdrop-filter:blur(14px);z-index:3}h1{font-size:25px;margin:0}.sub{color:var(--muted);font-size:13px;margin-top:5px}main{max-width:760px;margin:auto;padding:18px 16px calc(40px + env(safe-area-inset-bottom))}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}label{display:block;color:var(--muted);font-size:12px;margin:12px 0 6px}select,input{width:100%;background:#0d0f12;color:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:17px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:580px){.grid{grid-template-columns:1fr}}button{width:100%;border:0;border-radius:12px;padding:14px;margin-top:16px;font-weight:800;font-size:16px;background:#f5f6f7;color:#111}.note,.muted{color:var(--muted);font-size:12px;line-height:1.5}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}.stats div{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px}.stats b{display:block;font-size:19px}.stats span{display:block;color:var(--muted);font-size:10px;margin-top:3px}.pool{display:flex;flex-wrap:wrap;gap:6px}.pool span{border:1px solid var(--line);background:#20242a;border-radius:999px;padding:6px 9px;font-weight:700}.ticket{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0d0f12;border:1px solid var(--line);border-radius:11px;padding:10px;margin-top:7px;font-size:14px}.error{padding:12px;border:1px solid #6a3232;background:#2a1717;border-radius:10px;color:#ffd0d0}h2{margin:0 0 4px;font-size:20px}h3{margin:16px 0 8px;font-size:14px}`;
-  document.head.appendChild(style);
-  document.body.innerHTML=`<header><h1>ORACLE / PLATO — v3.5</h1><div class="sub">full-history distilled engine • Prize Coverage Mode • on-device</div></header><main><div class="card"><h2>Generate numbers</h2><p class="note">PLATO automatically checks all compatible historical draws. No history-window or fold controls are needed here.</p><div class="grid"><div><label>Game</label><select id="v35Game"></select></div><div><label>Tickets</label><input id="v35Count" type="number" min="1" max="100" value="20"></div></div><button id="v35Generate">Generate v3.5</button><div id="v35Summary"></div><div id="v35Tickets"></div><p class="note" style="margin-top:16px">Prize Coverage Mode is designed to diversify partial-match coverage across the portfolio. It does not change the equal probability of exact combinations in a fair draw.${GAME_CFG.pb?' Powerball numbers are coverage-rotated rather than model-ranked.':''}</p></div></main>`;
-  const sel=document.getElementById('v35Game');
-  for(const [key,cfg] of Object.entries(GAME_CFG)){const o=document.createElement('option');o.value=key;o.textContent=cfg.name;sel.appendChild(o)}
-  sel.value='sat';
-  document.getElementById('v35Generate').addEventListener('click',run);
+function install(){
+  const select=document.getElementById('v35Game');
+  for(const [key,cfg] of Object.entries(GAME_CFG)){const option=document.createElement('option');option.value=key;option.textContent=cfg.name;select.appendChild(option);}
+  select.value='sat';document.getElementById('v35Form').addEventListener('submit',run);
+  document.getElementById('v35Generate').disabled=false;
 }
-
-if(window.PLATO_V35&&window.GAME_CFG)render();else setTimeout(render,0);
-window.PLATO_V35_COVERAGE={VERSION,portfolio,coveragePoolK};
+window.PLATO_V35_COVERAGE={VERSION,portfolio,coveragePoolK,formatTicket,run};
+install();
 })();

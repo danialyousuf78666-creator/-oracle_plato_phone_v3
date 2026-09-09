@@ -1,10 +1,1 @@
-{
-  "name": "ORACLE / PLATO v3.5",
-  "short_name": "PLATO v3.5",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#0b0c0e",
-  "theme_color": "#0b0c0e",
-  "description": "PLATO v3.5 full-history distilled phone engine with Prize Coverage Mode."
-}
+{"id":"./","name":"PLATO v3.5","short_name":"PLATO","start_url":"./","scope":"./","display":"standalone","background_color":"#0b0c0e","theme_color":"#0b0c0e","description":"PLATO v3.5 with Prize Coverage Mode. Experimental; no prospective predictive edge established."}

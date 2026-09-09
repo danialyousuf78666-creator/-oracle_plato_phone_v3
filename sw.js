@@ -1,17 +1,43 @@
-const CACHE='oracle-plato-v35-live-1';
-const ASSETS=['./v35/index.html','./v35/manifest.webmanifest','./v35/plato_v35_phone.js','./v35/prize_coverage.js','./index.html?legacy=1'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('oracle-plato-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',e=>{
-  const u=new URL(e.request.url);if(u.origin!==location.origin)return;
-  if(e.request.mode==='navigate'){
-    if(u.searchParams.get('legacy')==='1'){
-      e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match('./index.html?legacy=1')));
-      return;
-    }
-    if(u.pathname.includes('/v35/'))return;
-    e.respondWith(fetch('./v35/index.html?v=live-1',{cache:'no-store'}).catch(()=>caches.match('./v35/index.html')));
-    return;
+const BUILD='v35-root-20260909-1';
+const ROOT=new URL('./',self.location.href);
+const CACHE=`plato-root:${ROOT.pathname}:${BUILD}`;
+const SHELL=new URL('index.html',ROOT).href;
+const ASSETS=['index.html','manifest.webmanifest',...['history.js','era_history.js','plato_v35_phone.js','prize_coverage.js'].map(x=>`v35/${x}?build=${BUILD}`)].map(x=>new URL(x,ROOT).href);
+self.addEventListener('install',event=>event.waitUntil((async()=>{
+  const cache=await caches.open(CACHE);
+  // Atomic activation: a missing asset prevents replacement of the working worker.
+  await cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'})));
+  await self.skipWaiting();
+})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{
+  for(const key of await caches.keys()){
+    if(key===CACHE)continue;
+    if(!key.startsWith(`plato-root:${ROOT.pathname}:`)&&!key.startsWith('oracle-plato-')&&!key.startsWith('plato-v35-'))continue;
+    const entries=await (await caches.open(key)).keys();
+    if(entries.every(entry=>{const u=new URL(entry.url);return u.origin===ROOT.origin&&u.pathname.startsWith(ROOT.pathname);})){await caches.delete(key);}
   }
-  e.respondWith(fetch(e.request,{cache:'no-store'}).catch(()=>caches.match(e.request)));
+  await self.clients.claim();
+})()));
+self.addEventListener('fetch',event=>{
+  const request=event.request,url=new URL(request.url);
+  if(request.method!=='GET'||url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname))return;
+  if(request.mode==='navigate'){
+    // A bookmarked old path converges on the one root app, never an iframe.
+    if(url.pathname.startsWith(new URL('v35/',ROOT).pathname)){
+      event.respondWith(Promise.resolve(Response.redirect(ROOT.href,302)));return;
+    }
+    if(url.pathname!==ROOT.pathname&&url.pathname!==new URL('index.html',ROOT).pathname)return;
+    event.respondWith((async()=>{
+      try{
+        const response=await fetch(request,{cache:'no-store'});
+        if(!response.ok)throw new Error('Navigation unavailable');
+        // Preserve a coherent offline release while a newer worker installs.
+        const html=await response.clone().text();
+        if(html.includes(`content="${BUILD}"`)){const cache=await caches.open(CACHE);await cache.put(SHELL,response.clone());}
+        return response;
+      }catch(error){const cached=await (await caches.open(CACHE)).match(SHELL);if(cached)return cached;throw error;}
+    })());return;
+  }
+  if(!ASSETS.includes(url.href))return;
+  event.respondWith((async()=>{const cache=await caches.open(CACHE);return await cache.match(request)||fetch(request);})());
 });

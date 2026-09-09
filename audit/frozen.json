@@ -1,0 +1,7 @@
+{
+  "base_commit": "75c14a1259ed43918147c385150c622af60ee4eb",
+  "training_commit": "0c706b064912cd8cd08d265951d02c2da2cbd1db",
+  "original_root_sha256": "9a4037d166db7acbe905054e7449fe5a7350cb25d1b67c1a9e05ba33f18431c0",
+  "legacy_control_sha256": "f77f404d26a3a9f41162271722857f91c5fdedd9e50e5f4136534210d83f653d",
+  "history_sha256": "c07c75ae190ba2a84731850de4019435b85677ab14ed762ca0c2a2f6cab9f59f"
+}
