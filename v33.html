@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ORACLE / PLATO v3.3 Prospective</title>
+<style>html,body,iframe{margin:0;width:100%;height:100%;border:0;background:#0b0c0e}iframe{display:block}</style>
+</head>
+<body>
+<iframe id="app" src="index.html" title="ORACLE PLATO v3.3 Prospective"></iframe>
+<script>
+const app=document.getElementById('app');
+app.addEventListener('load',()=>{
+  const d=app.contentDocument;if(!d)return;
+  const s32=d.createElement('script');
+  s32.src='plato_v32_cooperative.js?v=3.2-frozen';
+  s32.onload=()=>{
+    const s33=d.createElement('script');
+    s33.src='plato_v33_prospective.js?v=3.3-prospective-1';
+    d.body.appendChild(s33);
+  };
+  d.body.appendChild(s32);
+});
+</script>
+</body>
+</html>
