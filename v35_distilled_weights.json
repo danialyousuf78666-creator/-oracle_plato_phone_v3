@@ -1,0 +1,90 @@
+{
+  "version": "PLATO-v3.5-distilled-training-checkpoint-1",
+  "status": "experimental-development-only",
+  "pattern_groups": 17,
+  "compact_methods_evaluated": 35,
+  "history_windows": [100,150,200,250,500,1000,"all-prior"],
+  "notes": [
+    "Raw number-specific methods are restricted to compatible rule eras.",
+    "Structural methods may use older eras only after normalization.",
+    "Historical development results are not untouched confirmation.",
+    "Frozen v3/v3.2/v3.3/v3.4 remain controls."
+  ],
+  "games": {
+    "powerball": {
+      "current_matrix": "7/35",
+      "development_mean_hits": 3.1666666667,
+      "random_expectation": 3.0,
+      "selected_methods": {
+        "m2_06_sum_band": 0.1587839135,
+        "m2_08_spacing_pattern": 0.1587839135,
+        "m2_05_parity_structure": 0.1270271308,
+        "m1_18_temporal_month": 0.1241394632,
+        "m1_14_sum_conditional": 0.1239009799,
+        "m1_06_recency": 0.1164415366,
+        "m1_13_parity_conditional": 0.0996939665,
+        "m2_14_regime_structure": 0.0912290958
+      }
+    },
+    "saturday": {
+      "current_matrix": "6/45",
+      "development_mean_hits": 2.0,
+      "random_expectation": 2.0,
+      "selected_methods": {
+        "m1_08_gap_zscore": 0.2414698068,
+        "m1_07_gap_pressure": 0.2224693524,
+        "m2_10_recurrence_structure": 0.1800802680,
+        "m2_05_parity_structure": 0.1350602010,
+        "m1_13_parity_conditional": 0.0736830346,
+        "m1_12_range_density": 0.0506135748,
+        "m2_04_range_structure": 0.0506135748,
+        "m1_11_position_density": 0.0460101876
+      }
+    },
+    "oz": {
+      "current_matrix": "7/47",
+      "development_mean_hits": 2.4166666667,
+      "random_expectation": 2.2340425532,
+      "selected_methods": {
+        "m1_12_range_density": 0.1633024018,
+        "m2_04_range_structure": 0.1633024018,
+        "m2_06_sum_band": 0.1621858339,
+        "m1_14_sum_conditional": 0.1413402732,
+        "m2_13_feature_interactions": 0.1117271255,
+        "m1_10_pair_transition": 0.0888840731,
+        "m1_02_short_frequency": 0.0846289453,
+        "m2_11_signature_similarity": 0.0846289453
+      }
+    },
+    "set_for_life": {
+      "current_matrix": "7/44",
+      "development_mean_hits": 2.125,
+      "random_expectation": 2.3863636364,
+      "selected_methods": {
+        "m2_01_structural_draw_templates": 0.2225580422,
+        "m2_12_normalized_number_density": 0.2225580422,
+        "m2_10_recurrence_structure": 0.1937564132,
+        "m2_05_parity_structure": 0.1073515262,
+        "m1_05_exponential_frequency": 0.0904092089,
+        "m2_07_adjacency_structure": 0.0785498972,
+        "m2_09_position_transition": 0.0497482682,
+        "m1_13_parity_conditional": 0.0350686019
+      }
+    },
+    "windfall": {
+      "current_matrix": "6/45",
+      "development_mean_hits": 2.4166666667,
+      "random_expectation": 2.0,
+      "selected_methods": {
+        "m1_05_exponential_frequency": 0.1841527353,
+        "m1_03_medium_frequency": 0.1311399261,
+        "m1_02_short_frequency": 0.1252955115,
+        "m1_17_transition": 0.1152018064,
+        "m1_01_global_frequency": 0.1110525052,
+        "m1_04_long_frequency": 0.1110525052,
+        "m1_09_pair_association": 0.1110525052,
+        "m2_02_pair_graph": 0.1110525052
+      }
+    }
+  }
+}
