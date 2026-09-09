@@ -1,0 +1,10 @@
+{
+  "name": "PLATO v3.5 Distilled",
+  "short_name": "PLATO v3.5",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#0b0c0e",
+  "description": "Experimental distilled PLATO v3.5 phone engine using eight selected methods per game."
+}
