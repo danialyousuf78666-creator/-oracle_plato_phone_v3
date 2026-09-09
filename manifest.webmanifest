@@ -1,10 +1,10 @@
 {
-  "name": "ORACLE / PLATO Phone v3",
-  "short_name": "PLATO v3",
+  "name": "ORACLE / PLATO Phone v3 + v3.1",
+  "short_name": "PLATO v3+",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0b0c0e",
   "theme_color": "#0b0c0e",
-  "description": "Offline phone-first lottery structural analysis tool with five embedded histories."
+  "description": "Offline cooperative PLATO: classic v3 plus adaptive v3.1 with random-control backtesting."
 }

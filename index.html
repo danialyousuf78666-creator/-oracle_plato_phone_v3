@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0c0e">
 <link rel="manifest" href="manifest.webmanifest">
-<title>ORACLE / PLATO Phone v3</title>
+<title>ORACLE / PLATO Phone v3 + v3.1</title>
 <style>
 :root{--bg:#0b0c0e;--card:#15181c;--card2:#0f1114;--text:#f4f6f8;--muted:#9da5af;--line:#2a3038;--good:#a8e6b5;--warn:#ffd590;--bad:#ffaaaa}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -28,17 +28,21 @@ table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 5px;b
 pre{white-space:pre-wrap;word-break:break-word;background:#0d0f12;border:1px solid var(--line);border-radius:11px;padding:10px;font-size:11px}
 .pill{display:inline-block;border:1px solid var(--line);background:#20242a;border-radius:999px;padding:4px 7px;font-size:10px;margin:2px}
 .ticket{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0d0f12;border:1px solid var(--line);border-radius:10px;padding:9px;margin:5px 0;font-size:14px}
-hr{border:0;border-top:1px solid var(--line);margin:13px 0}
+hr{border:0;border-top:1px solid var(--line);margin:13px 0}.modelrow{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.edge{font-weight:800}.tiny{font-size:10px;color:var(--muted)}
 </style>
 </head>
 <body>
-<header><h1>ORACLE / PLATO — Phone v3</h1><div class="sub">5 lottery histories embedded • structural engine runs on-device</div></header>
+<header><h1>ORACLE / PLATO — v3 + v3.1</h1><div class="sub">classic v3 + adaptive v3.1 • cooperative consensus • on-device</div></header>
 <nav id="nav"></nav>
 <main>
 <section id="home" class="shown">
  <div class="card"><h2>Loaded datasets</h2><div id="gameCards" class="grid"></div></div>
  <div class="card"><h2>Integrity</h2><div id="integrity"></div></div>
- <div class="card"><h2>Runtime</h2><p class="note">The five source histories are embedded inside this HTML. Analysis, ranking, backtesting and ticket construction execute in JavaScript on the device. No Python, Mac or prediction server is used by this build.</p></div>
+ <div class="card"><h2>Cooperative engine</h2><div class="grid3">
+  <div class="kpi"><b>PLATO v3</b><span>stable classic F/R/G/P structural ranking</span></div>
+  <div class="kpi"><b>PLATO v3.1</b><span>Machine 1 + Machine 2 adaptive dual-head</span></div>
+  <div class="kpi"><b>Combined</b><span>chronologically learns how much v3 and v3.1 should contribute</span></div>
+ </div><p class="note" style="margin-top:9px">v3 is not removed. The cooperative head keeps the classic v3 model and the adaptive v3.1 model alive together, then learns their blend only from earlier draws. Backtest uses later untouched draws for evaluation.</p></div>
 </section>
 
 <section id="analysis">
@@ -49,7 +53,7 @@ hr{border:0;border-top:1px solid var(--line);margin:13px 0}
    <div><label>Training window</label><select id="windowSelect"><option value="100">Last 100</option><option value="250">Last 250</option><option value="500">Last 500</option><option value="1000">Last 1000</option><option value="0">All available</option></select></div>
    <div><label>Candidate shortlist</label><input id="shortK" type="number" value="15" min="7" max="30"></div>
   </div>
-  <button class="primary" onclick="runAnalysis()">Train structural ranking</button>
+  <button class="primary" onclick="runAnalysis()">Run v3 + v3.1 together</button>
   <div id="analysisSummary" style="margin-top:10px"></div>
   <div class="scroll"><table id="rankTable"></table></div>
  </div>
@@ -58,7 +62,7 @@ hr{border:0;border-top:1px solid var(--line);margin:13px 0}
 </section>
 
 <section id="backtest">
- <div class="card"><h2>Chronological walk-forward backtest</h2>
+ <div class="card"><h2>Chronological walk-forward + random control</h2>
   <div class="grid3">
    <div><label>Game</label><select id="btGame"></select></div>
    <div><label>Folds</label><input id="btFolds" type="number" value="100" min="20" max="500"></div>
@@ -78,7 +82,7 @@ hr{border:0;border-top:1px solid var(--line);margin:13px 0}
    <div><label>Shortlist size</label><input id="ticketK" type="number" value="15" min="7" max="30"></div>
    <div><label>Tickets</label><input id="ticketCount" type="number" value="20" min="1" max="100"></div>
   </div>
-  <button class="primary" onclick="makeTickets()">Generate portfolio</button>
+  <button class="primary" onclick="makeTickets()">Generate combined portfolio</button>
   <div id="ticketSummary" class="note" style="margin-top:9px"></div><div id="ticketList"></div>
   <p class="note">Candidate compression and structural allocation do not alter the equal probability of any exact combination in a fair draw. Use the backtest to measure whether a ranking rule has shown out-of-sample capture beyond its random expectation.</p>
  </div>
@@ -106,7 +110,7 @@ hr{border:0;border-top:1px solid var(--line);margin:13px 0}
  </div>
  <div class="card"><h2>Backup / restore local additions</h2>
   <button class="secondary" onclick="exportLocal()">Export backup</button>
-  <textarea id="restoreText" placeholder="Paste ORACLE_PLATO_V3 backup JSON"></textarea>
+  <textarea id="restoreText" placeholder="Paste ORACLE_PLATO backup JSON"></textarea>
   <button class="secondary" onclick="restoreLocal()">Restore backup</button>
   <button class="danger" onclick="clearLocal()">Clear local additions</button>
   <pre id="backupOut">Embedded source histories are read-only and cannot be erased here.</pre>
@@ -171,30 +175,56 @@ function getTrainRows(key,mode,windowN){
  if(windowN>0 && rows.length>windowN)rows=rows.slice(-windowN);
  return rows;
 }
-function rankNumbers(key,rows){
- const c=GAME_CFG[key],n=c.n; if(rows.length<5)throw new Error("Not enough compatible draws.");
+const V3_WEIGHTS=[.40,.25,.20,.15];
+function numberFeatures(key,rows){
+ const c=GAME_CFG[key],n=c.n;if(rows.length<5)throw new Error("Not enough compatible draws.");
  const freq=Array(n+1).fill(0),last=Array(n+1).fill(-1),gapSum=Array(n+1).fill(0),gapN=Array(n+1).fill(0),prev=Array(n+1).fill(-1);
  const pair=Array.from({length:n+1},()=>Array(n+1).fill(0));
- rows.forEach((row,idx)=>{
-   const a=row[2];
-   a.forEach(x=>{freq[x]++;last[x]=idx;if(prev[x]>=0){gapSum[x]+=idx-prev[x];gapN[x]++}prev[x]=idx});
-   for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){pair[a[i]][a[j]]++;pair[a[j]][a[i]]++}
- });
- const maxF=Math.max(...freq), m=rows.length;
- const hot=[...Array(n).keys()].map(i=>i+1).sort((a,b)=>freq[b]-freq[a]).slice(0,Math.max(c.r,10));
- let arr=[];
+ rows.forEach((row,idx)=>{const a=row[2];a.forEach(x=>{freq[x]++;last[x]=idx;if(prev[x]>=0){gapSum[x]+=idx-prev[x];gapN[x]++}prev[x]=idx});for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){pair[a[i]][a[j]]++;pair[a[j]][a[i]]++}});
+ const maxF=Math.max(...freq),m=rows.length,hot=[...Array(n).keys()].map(i=>i+1).sort((a,b)=>freq[b]-freq[a]).slice(0,Math.max(c.r,10));
+ const arr=[];
  for(let x=1;x<=n;x++){
-   const f=maxF?freq[x]/maxF:0;
-   const since=last[x]<0?m:m-1-last[x];
-   const rec=1/(1+since/Math.max(1,m/20));
-   const avgGap=gapN[x]?gapSum[x]/gapN[x]:m/Math.max(1,freq[x]);
-   const gapPressure=Math.min(2,since/Math.max(1,avgGap))/2;
-   const pairScore=mean(hot.filter(y=>y!==x).map(y=>pair[x][y]))/(Math.max(1,m));
-   const score=.40*f+.25*rec+.20*gapPressure+.15*Math.min(1,pairScore*20);
-   arr.push({number:x,score,freq:freq[x],rate:freq[x]/m,since,avgGap,pair:pairScore});
+   const f=maxF?freq[x]/maxF:0,since=last[x]<0?m:m-1-last[x],rec=1/(1+since/Math.max(1,m/20));
+   const avgGap=gapN[x]?gapSum[x]/gapN[x]:m/Math.max(1,freq[x]),gap=Math.min(2,since/Math.max(1,avgGap))/2;
+   const pairRaw=mean(hot.filter(y=>y!==x).map(y=>pair[x][y]))/Math.max(1,m),pairN=Math.min(1,pairRaw*20);
+   arr.push({number:x,features:[f,rec,gap,pairN],freq:freq[x],rate:freq[x]/m,since,avgGap,pair:pairRaw});
  }
- return arr.sort((a,b)=>b.score-a.score||a.number-b.number);
+ return arr;
 }
+function rankWithWeights(key,rows,w=V3_WEIGHTS){
+ return numberFeatures(key,rows).map(x=>({...x,score:x.features.reduce((s,v,i)=>s+v*(w[i]||0),0)})).sort((a,b)=>b.score-a.score||a.number-b.number);
+}
+function rankNumbers(key,rows,w=V3_WEIGHTS){return rankWithWeights(key,rows,w)}
+function weightLabel(w){return `F ${fmt(100*w[0],0)}% · R ${fmt(100*w[1],0)}% · G ${fmt(100*w[2],0)}% · P ${fmt(100*w[3],0)}%`}
+function buildValidationFrames(key,rows,folds=60,trainWindow=0){
+ const ordered=rows.slice().sort((a,b)=>a[0]-b[0]);const maxF=Math.max(0,ordered.length-30),use=Math.min(folds,maxF),start=ordered.length-use,frames=[];
+ for(let i=start;i<ordered.length;i++){let hist=ordered.slice(0,i);if(trainWindow>0&&hist.length>trainWindow)hist=hist.slice(-trainWindow);if(hist.length<30)continue;frames.push({features:numberFeatures(key,hist),draw:ordered[i][2]})}
+ return frames;
+}
+function avgForWeights(frames,w,k){if(!frames.length)return 0;let s=0;for(const fr of frames){const short=fr.features.map(x=>({...x,score:x.features.reduce((q,v,i)=>q+v*w[i],0)})).sort((a,b)=>b.score-a.score).slice(0,k).map(x=>x.number);s+=hitCount(short,fr.draw)}return s/frames.length}
+function tuneHead(frames,k,kind){let best=null;for(let i=0;i<=10;i++){const a=i/10,w=kind===1?[a,1-a,0,0]:[0,0,a,1-a],avg=avgForWeights(frames,w,k);if(!best||avg>best.avg+1e-12||Math.abs(avg-best.avg)<1e-12&&Math.abs(a-.5)<Math.abs(best.a-.5))best={a,w,avg}}return best}
+function learnDualHead(key,rows,k,trainWindow=0){
+ const c=GAME_CFG[key],frames=buildValidationFrames(key,rows,Math.min(80,Math.max(20,Math.floor(rows.length*.28))),trainWindow);if(frames.length<10)return {weights:V3_WEIGHTS,m1:[.55,.45,0,0],m2:[0,0,.55,.45],alpha:.5,frames:frames.length,m1Avg:0,m2Avg:0,fusionAvg:0,expected:c.r*k/c.n};
+ const m1=tuneHead(frames,k,1),m2=tuneHead(frames,k,2);let best=null;
+ for(let i=0;i<=10;i++){const a=i/10,w=m1.w.map((v,j)=>a*v+(1-a)*m2.w[j]),avg=avgForWeights(frames,w,k);if(!best||avg>best.avg+1e-12||Math.abs(avg-best.avg)<1e-12&&Math.abs(a-.5)<Math.abs(best.a-.5))best={a,w,avg}}
+ return {weights:best.w,m1:m1.w,m2:m2.w,alpha:best.a,frames:frames.length,m1Avg:m1.avg,m2Avg:m2.avg,fusionAvg:best.avg,expected:c.r*k/c.n};
+}
+function learnCooperativeModel(key,rows,k,trainWindow=0){
+ const dual=learnDualHead(key,rows,k,trainWindow);
+ const frames=buildValidationFrames(key,rows,Math.min(80,Math.max(20,Math.floor(rows.length*.28))),trainWindow);
+ if(frames.length<10){
+  const w=V3_WEIGHTS.map((v,j)=>(v+dual.weights[j])/2);
+  return {...dual,coopWeights:w,classicShare:.5,classicAvg:0,coopAvg:0};
+ }
+ const classicAvg=avgForWeights(frames,V3_WEIGHTS,k);
+ let best=null;
+ for(let i=0;i<=10;i++){
+  const a=i/10,w=V3_WEIGHTS.map((v,j)=>a*v+(1-a)*dual.weights[j]),avg=avgForWeights(frames,w,k);
+  if(!best||avg>best.avg+1e-12||(Math.abs(avg-best.avg)<1e-12&&Math.abs(a-.5)<Math.abs(best.a-.5)))best={a,w,avg};
+ }
+ return {...dual,coopWeights:best.w,classicShare:best.a,classicAvg,coopAvg:best.avg};
+}
+function agreementCount(a,b,k){const A=new Set(a.slice(0,k).map(x=>x.number));return b.slice(0,k).filter(x=>A.has(x.number)).length}
 function oddEvenDist(n,r){
  const odds=Math.ceil(n/2),evens=Math.floor(n/2),total=nCr(n,r),out=[];
  for(let o=0;o<=r;o++){const cnt=nCr(odds,o)*nCr(evens,r-o);if(cnt)out.push({o,e:r-o,count:cnt,p:cnt/total})}
@@ -208,49 +238,76 @@ function structuralStats(rows){
 }
 function runAnalysis(){
  try{
-  const key=document.getElementById("gameSelect").value,mode=document.getElementById("eraSelect").value,w=+document.getElementById("windowSelect").value,k=+document.getElementById("shortK").value,c=GAME_CFG[key];
-  const rows=getTrainRows(key,mode,w),rank=rankNumbers(key,rows),st=structuralStats(rows),dist=oddEvenDist(c.n,c.r);LAST_RANKING={key,rank,rows};
-  const shortlist=rank.slice(0,Math.min(k,c.n)).map(x=>x.number);
-  const comp=nCr(c.n,c.r)/nCr(Math.min(k,c.n),c.r);
-  document.getElementById("analysisSummary").innerHTML=`<div class="grid3"><div class="kpi"><b>${rows.length}</b><span>training draws</span></div><div class="kpi"><b>${shortlist.join(" ")}</b><span>top-${Math.min(k,c.n)} shortlist</span></div><div class="kpi"><b>${fmt(comp,1)}×</b><span>combination-space compression if winners are inside shortlist</span></div></div>`;
-  document.getElementById("rankTable").innerHTML="<tr><th>#</th><th>Score</th><th>Freq</th><th>Rate</th><th>Draws since</th><th>Avg gap</th></tr>"+rank.map(x=>`<tr><td>${x.number}</td><td>${fmt(x.score,4)}</td><td>${x.freq}</td><td>${fmt(100*x.rate,2)}%</td><td>${x.since}</td><td>${fmt(x.avgGap,1)}</td></tr>`).join("");
-  const obs={};st.oddCounts.forEach(o=>obs[o]=(obs[o]||0)+1);
-  document.getElementById("oeTable").innerHTML="<tr><th>Pattern</th><th>Theory</th><th>Expected</th><th>Observed</th><th>O/E</th></tr>"+dist.out.map(x=>{const ex=x.p*rows.length,ob=obs[x.o]||0;return `<tr><td>${x.o} odd / ${x.e} even</td><td>${fmt(100*x.p,3)}%</td><td>${fmt(ex,2)}</td><td>${ob}</td><td>${ex?fmt(ob/ex,3):"-"}</td></tr>`}).join("");
+  const key=document.getElementById("gameSelect").value,mode=document.getElementById("eraSelect").value,w=+document.getElementById("windowSelect").value,k=+document.getElementById("shortK").value,c=GAME_CFG[key],kk=Math.min(k,c.n);
+  const rows=getTrainRows(key,mode,w),model=learnCooperativeModel(key,rows,kk,0),classic=rankNumbers(key,rows,V3_WEIGHTS),adaptive=rankNumbers(key,rows,model.weights),rank=rankNumbers(key,rows,model.coopWeights),st=structuralStats(rows),dist=oddEvenDist(c.n,c.r);LAST_RANKING={key,rank,classic,adaptive,rows,model};
+  const shortlist=rank.slice(0,kk).map(x=>x.number),classicShort=classic.slice(0,kk).map(x=>x.number),adaptiveShort=adaptive.slice(0,kk).map(x=>x.number),comp=nCr(c.n,c.r)/nCr(kk,c.r),agreement=agreementCount(classic,adaptive,kk),classicEdge=model.classicAvg-model.expected,adaptiveEdge=model.fusionAvg-model.expected,coopEdge=model.coopAvg-model.expected;
+  const cm=Object.fromEntries(classic.map(x=>[x.number,x.score])),am=Object.fromEntries(adaptive.map(x=>[x.number,x.score]));
+  document.getElementById("analysisSummary").innerHTML=`<div class="grid3"><div class="kpi"><b>${rows.length}</b><span>training draws</span></div><div class="kpi"><b>${shortlist.join(" ")}</b><span>top-${kk} combined shortlist</span></div><div class="kpi"><b>${fmt(comp,1)}×</b><span>candidate-space compression if winners are inside shortlist</span></div></div><div class="modelrow"><span class="pill">v3 ${classicShort.join(" ")}</span><span class="pill">v3.1 ${adaptiveShort.join(" ")}</span><span class="pill good">agreement ${agreement}/${kk}</span></div><div class="modelrow"><span class="pill">v3 validation Δ ${fmt(classicEdge,3)}</span><span class="pill">v3.1 validation Δ ${fmt(adaptiveEdge,3)}</span><span class="pill ${coopEdge>0?'good':'warn'}">combined validation Δ ${fmt(coopEdge,3)}</span></div><div class="tiny">Cooperative blend: ${fmt(100*model.classicShare,0)}% v3 + ${fmt(100*(1-model.classicShare),0)}% v3.1 · combined weights ${weightLabel(model.coopWeights)} · internal chronological folds ${model.frames}.</div>`;
+  document.getElementById("rankTable").innerHTML="<tr><th>#</th><th>Combined</th><th>v3</th><th>v3.1</th><th>Freq</th><th>Draws since</th></tr>"+rank.map(x=>`<tr><td>${x.number}</td><td>${fmt(x.score,4)}</td><td>${fmt(cm[x.number],4)}</td><td>${fmt(am[x.number],4)}</td><td>${x.freq}</td><td>${x.since}</td></tr>`).join("");
+  const obs={};st.oddCounts.forEach(o=>obs[o]=(obs[o]||0)+1);document.getElementById("oeTable").innerHTML="<tr><th>Pattern</th><th>Theory</th><th>Expected</th><th>Observed</th><th>O/E</th></tr>"+dist.out.map(x=>{const ex=x.p*rows.length,ob=obs[x.o]||0;return `<tr><td>${x.o} odd / ${x.e} even</td><td>${fmt(100*x.p,3)}%</td><td>${fmt(ex,2)}</td><td>${ob}</td><td>${ex?fmt(ob/ex,3):"-"}</td></tr>`}).join("");
   document.getElementById("diagOut").textContent=`Game: ${c.name}
 Matrix used: ${c.r}/${c.n}${c.bonusN?` + PB 1/${c.bonusN}`:""}
 Draws analyzed: ${rows.length}
 Sum: mean ${fmt(st.sumMean,2)}, SD ${fmt(st.sumSD,2)}, range ${st.sumMin}–${st.sumMax}
 At least one consecutive pair: ${fmt(100*st.consecutiveAny,2)}%
-Top shortlist: ${shortlist.join(", ")}
-Note: ranking score combines frequency, recency, gap pressure and pair association. Backtest it before treating it as useful signal.`;
+
+PLATO v3 weights: ${weightLabel(V3_WEIGHTS)}
+PLATO v3.1 adaptive weights: ${weightLabel(model.weights)}
+Cooperative blend: ${fmt(100*model.classicShare,0)}% v3 / ${fmt(100*(1-model.classicShare),0)}% v3.1
+Combined weights: ${weightLabel(model.coopWeights)}
+
+v3 shortlist: ${classicShort.join(", ")}
+v3.1 shortlist: ${adaptiveShort.join(", ")}
+COMBINED shortlist: ${shortlist.join(", ")}
+Agreement: ${agreement}/${kk}
+
+Note: v3 and v3.1 both remain active. Their blend is trained only on earlier chronological validation folds; use Backtest for later untouched evaluation.`;
  }catch(e){document.getElementById("diagOut").textContent="ERROR: "+e.message}
 }
 function hitCount(shortlist,draw){const s=new Set(shortlist);return draw.filter(x=>s.has(x)).length}
+function hypergeomDist(n,r,k){const den=nCr(n,k),a=[];for(let h=Math.max(0,k-(n-r));h<=Math.min(r,k);h++){a.push({h,p:nCr(r,h)*nCr(n-r,k-h)/den})}return a}
+function sampleDiscrete(dist){let q=Math.random();for(const x of dist){q-=x.p;if(q<=0)return x.h}return dist[dist.length-1].h}
+function randomControl(n,r,k,folds,sims=5000){const d=hypergeomDist(n,r,k),avgs=[];for(let s=0;s<sims;s++){let z=0;for(let i=0;i<folds;i++)z+=sampleDiscrete(d);avgs.push(z/folds)}avgs.sort((a,b)=>a-b);return {avgs,lo:avgs[Math.floor(.025*(sims-1))],hi:avgs[Math.floor(.975*(sims-1))],mean:mean(avgs),p:(obs)=>Math.max(1/sims,avgs.filter(x=>x>=obs-1e-12).length/sims)}}
+function methodBacktest(key,rows,start,k,tw,w){const c=GAME_CFG[key],hits=[];let full=0;for(let i=start;i<rows.length;i++){let hist=rows.slice(0,i);if(tw>0&&hist.length>tw)hist=hist.slice(-tw);const short=rankNumbers(key,hist,w).slice(0,k).map(x=>x.number),h=hitCount(short,rows[i][2]);hits.push(h);if(h===c.r)full++}return {hits,avg:mean(hits),full,best:Math.max(...hits)}}
 function runBacktest(){
  const out=document.getElementById("btOut");
  try{
-  const key=document.getElementById("btGame").value,c=GAME_CFG[key],folds=+document.getElementById("btFolds").value,k=Math.min(+document.getElementById("btK").value,c.n),tw=+document.getElementById("btWindow").value;
-  const rows=currentRows(key).slice().sort((a,b)=>a[0]-b[0]);if(rows.length<folds+30)throw new Error(`Only ${rows.length} current-format draws available.`);
-  const start=Math.max(30,rows.length-folds),hits=[];let full=0;
-  for(let i=start;i<rows.length;i++){
-    let hist=rows.slice(0,i);if(tw>0&&hist.length>tw)hist=hist.slice(-tw);
-    const rank=rankNumbers(key,hist),short=rank.slice(0,k).map(x=>x.number),h=hitCount(short,rows[i][2]);hits.push(h);if(h===c.r)full++;
-  }
-  const histo={};hits.forEach(h=>histo[h]=(histo[h]||0)+1);const expected=c.r*k/c.n,avg=mean(hits);
-  out.textContent=`${c.name} — chronological walk-forward
-Folds: ${hits.length}
+  const key=document.getElementById("btGame").value,c=GAME_CFG[key],requested=Math.max(20,+document.getElementById("btFolds").value||100),k=Math.min(Math.max(c.r,+document.getElementById("btK").value||15),c.n),tw=Math.max(0,+document.getElementById("btWindow").value||0);
+  const rows=currentRows(key).slice().sort((a,b)=>a[0]-b[0]),minTrain=60,maxFolds=Math.max(0,rows.length-minTrain);if(maxFolds<20)throw new Error(`Only ${rows.length} current-format draws; need at least ${minTrain+20}.`);
+  const folds=Math.min(requested,maxFolds),start=rows.length-folds,prefix=rows.slice(0,start),model=learnCooperativeModel(key,prefix,k,tw);
+  const classic=methodBacktest(key,rows,start,k,tw,V3_WEIGHTS),m1=methodBacktest(key,rows,start,k,tw,model.m1),m2=methodBacktest(key,rows,start,k,tw,model.m2),adaptive=methodBacktest(key,rows,start,k,tw,model.weights),combined=methodBacktest(key,rows,start,k,tw,model.coopWeights),expected=c.r*k/c.n,rc=randomControl(c.n,c.r,k,folds,5000),p=rc.p(combined.avg),delta=combined.avg-expected;
+  const status=delta>0&&p<.05?"EVIDENCE ABOVE RANDOM IN THIS WINDOW — REPLICATE":"NO VERIFIED EDGE";
+  const histo={};combined.hits.forEach(h=>histo[h]=(histo[h]||0)+1);
+  out.textContent=`${c.name} — v3 + v3.1 cooperative outer backtest
+Requested folds: ${requested}
+Used folds: ${folds}${folds<requested?` (auto-limited; only ${rows.length} current-format draws)`:""}
 Shortlist: top ${k} of ${c.n}
-Training window: ${tw||"all prior"} draws
+Training window per fold: ${tw||"all prior"}
 
-Average winning numbers captured: ${fmt(avg,4)} / ${c.r}
-Random shortlist expectation:      ${fmt(expected,4)} / ${c.r}
-Difference vs random expectation:  ${fmt(avg-expected,4)}
+MODEL TRAINING — prefix only (${prefix.length} draws)
+Classic v3: ${weightLabel(V3_WEIGHTS)}
+Machine 1: ${weightLabel(model.m1)}
+Machine 2: ${weightLabel(model.m2)}
+v3.1 Dual: ${weightLabel(model.weights)}
+Cooperative blend: ${fmt(100*model.classicShare,0)}% v3 / ${fmt(100*(1-model.classicShare),0)}% v3.1
+Combined: ${weightLabel(model.coopWeights)}
 
-Full ${c.r}/${c.r} captured inside shortlist: ${full}
-Best fold capture: ${Math.max(...hits)}
-Hit distribution: ${Object.keys(histo).sort((a,b)=>a-b).map(h=>`${h} hits=${histo[h]}`).join(", ")}
+OUTER TEST — untouched later draws
+Random exact expectation: ${fmt(expected,4)} hits/draw
+Random simulation 95% range: ${fmt(rc.lo,4)} – ${fmt(rc.hi,4)} (5,000 controls)
+PLATO v3: ${fmt(classic.avg,4)}  Δ ${fmt(classic.avg-expected,4)}
+Machine 1: ${fmt(m1.avg,4)}  Δ ${fmt(m1.avg-expected,4)}
+Machine 2: ${fmt(m2.avg,4)}  Δ ${fmt(m2.avg-expected,4)}
+PLATO v3.1 Dual: ${fmt(adaptive.avg,4)}  Δ ${fmt(adaptive.avg-expected,4)}
+COMBINED v3+v3.1: ${fmt(combined.avg,4)}  Δ ${fmt(delta,4)}
+Empirical random-control p (Combined): ${fmt(p,4)}
 
-Interpretation: this tests shortlist capture only. A positive difference in one window is not proof of predictability; repeat across independent windows and compare uncertainty.`;
+STATUS: ${status}
+Full ${c.r}/${c.r} inside combined shortlist: ${combined.full}
+Best fold capture: ${combined.best}
+Combined hit distribution: ${Object.keys(histo).sort((a,b)=>a-b).map(h=>`${h} hits=${histo[h]}`).join(", ")}
+
+Interpretation: classic v3 is preserved as an anchor and v3.1 remains adaptive. Their cooperative blend is fitted before the outer test. Only the later untouched folds assess the combined model.`;
  }catch(e){out.textContent="ERROR: "+e.message}
 }
 function weightedSample(items,weights,count){
@@ -259,19 +316,19 @@ function weightedSample(items,weights,count){
  return out
 }
 function choosePattern(dist){return weightedSample(dist.out,dist.out.map(x=>x.p),1)[0]}
+function pairKey(a,b){return a<b?`${a}-${b}`:`${b}-${a}`}
+function ticketPairs(t){const p=[];for(let i=0;i<t.length;i++)for(let j=i+1;j<t.length;j++)p.push(pairKey(t[i],t[j]));return p}
+function overlapFrac(a,b){const s=new Set(a);return a.filter(x=>s.has(x)&&b.includes(x)).length/Math.max(a.length,b.length)}
+function diversifyTickets(candidates,count,scoreMap){const selected=[],usedPairs=new Set();while(selected.length<count&&candidates.length){let bestI=0,best=-1e9;for(let i=0;i<candidates.length;i++){const t=candidates[i],quality=mean(t.map(n=>scoreMap[n]||0)),maxOv=selected.length?Math.max(...selected.map(s=>t.filter(x=>s.includes(x)).length/t.length)):0,pairs=ticketPairs(t),novel=pairs.length?pairs.filter(p=>!usedPairs.has(p)).length/pairs.length:0,obj=quality+.35*novel-.30*maxOv;if(obj>best){best=obj;bestI=i}}const t=candidates.splice(bestI,1)[0];selected.push(t);ticketPairs(t).forEach(p=>usedPairs.add(p))}return selected}
 function makeTickets(){
  const list=document.getElementById("ticketList"),sum=document.getElementById("ticketSummary");
  try{
   const key=document.getElementById("ticketGame").value,c=GAME_CFG[key],w=+document.getElementById("ticketWindow").value,k=Math.max(c.r,Math.min(+document.getElementById("ticketK").value,c.n)),tc=Math.min(100,+document.getElementById("ticketCount").value);
   let rows=currentRows(key).slice().sort((a,b)=>a[0]-b[0]);if(w>0&&rows.length>w)rows=rows.slice(-w);
-  const rank=rankNumbers(key,rows),short=rank.slice(0,k),pool=short.map(x=>x.number),weights=short.map(x=>Math.max(.02,x.score)),dist=oddEvenDist(c.n,c.r),tickets=[],seen=new Set();let guard=0;
-  while(tickets.length<tc&&guard<tc*500){guard++;const p=choosePattern(dist);const odds=pool.filter(x=>x%2),evens=pool.filter(x=>x%2===0);if(odds.length<p.o||evens.length<p.e)continue;
-    const a=weightedSample(odds,odds.map(x=>weights[pool.indexOf(x)]),p.o).concat(weightedSample(evens,evens.map(x=>weights[pool.indexOf(x)]),p.e)).sort((a,b)=>a-b);
-    const keystr=a.join("-");if(!seen.has(keystr)){seen.add(keystr);tickets.push(a)}
-  }
-  const bonusRank=c.bonusN?rankBonus(key,rows):null;
-  const comp=nCr(c.n,c.r)/nCr(k,c.r);
-  sum.innerHTML=`Shortlist <b>${pool.join(", ")}</b><br>${nCr(c.n,c.r).toLocaleString()} → ${nCr(k,c.r).toLocaleString()} combinations (${fmt(comp,1)}× compression).`;
+  const model=learnCooperativeModel(key,rows,k,0),classic=rankNumbers(key,rows,V3_WEIGHTS),adaptive=rankNumbers(key,rows,model.weights),rank=rankNumbers(key,rows,model.coopWeights),short=rank.slice(0,k),pool=short.map(x=>x.number),weights=short.map(x=>Math.max(.02,x.score)),scoreMap=Object.fromEntries(short.map(x=>[x.number,x.score])),dist=oddEvenDist(c.n,c.r),cand=[],seen=new Set();let guard=0,target=Math.min(1200,Math.max(tc*25,150));
+  while(cand.length<target&&guard<target*80){guard++;const p=choosePattern(dist),odds=pool.filter(x=>x%2),evens=pool.filter(x=>x%2===0);if(odds.length<p.o||evens.length<p.e)continue;const a=weightedSample(odds,odds.map(x=>weights[pool.indexOf(x)]),p.o).concat(weightedSample(evens,evens.map(x=>weights[pool.indexOf(x)]),p.e)).sort((a,b)=>a-b),ss=a.join("-");if(!seen.has(ss)){seen.add(ss);cand.push(a)}}
+  const tickets=diversifyTickets(cand,tc,scoreMap),bonusRank=c.bonusN?rankBonus(key,rows):null,comp=nCr(c.n,c.r)/nCr(k,c.r),agreement=agreementCount(classic,adaptive,k);let ovs=[];for(let i=0;i<tickets.length;i++)for(let j=i+1;j<tickets.length;j++)ovs.push(tickets[i].filter(x=>tickets[j].includes(x)).length/c.r);
+  sum.innerHTML=`Combined shortlist <b>${pool.join(", ")}</b><br>${nCr(c.n,c.r).toLocaleString()} → ${nCr(k,c.r).toLocaleString()} combinations (${fmt(comp,1)}× compression).<br><span class="tiny">Cooperative blend ${fmt(100*model.classicShare,0)}% v3 + ${fmt(100*(1-model.classicShare),0)}% v3.1 · v3/v3.1 shortlist agreement ${agreement}/${k} · ${tickets.length} unique tickets · mean pairwise overlap ${fmt(100*mean(ovs),1)}%.</span>`;
   list.innerHTML=tickets.map((t,i)=>{let b="";if(c.bonusN){const pb=weightedSample(bonusRank.map(x=>x.n),bonusRank.map(x=>x.w),1)[0];b=` + PB ${pb}`};return `<div class="ticket">${String(i+1).padStart(2,"0")}. ${t.map(x=>String(x).padStart(2,"0")).join("  ")}${b}</div>`}).join("");
  }catch(e){list.innerHTML="<pre>ERROR: "+e.message+"</pre>"}
 }
@@ -301,12 +358,12 @@ function addDrawLocal(){
  }catch(e){out.textContent="ERROR: "+e.message}
 }
 function exportLocal(){
- const b={format:"ORACLE_PLATO_V3",exported_at:new Date().toISOString(),additions:getAdds()};const s=JSON.stringify(b);document.getElementById("backupOut").textContent=s;
+ const b={format:"ORACLE_PLATO_V31",exported_at:new Date().toISOString(),additions:getAdds()};const s=JSON.stringify(b);document.getElementById("backupOut").textContent=s;
  try{navigator.clipboard.writeText(s)}catch(e){}
- const blob=new Blob([s],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="oracle_plato_phone_v3_backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+ const blob=new Blob([s],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="oracle_plato_phone_v31_backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
 }
 function restoreLocal(){
- try{const b=JSON.parse(document.getElementById("restoreText").value);if(b.format!=="ORACLE_PLATO_V3")throw new Error("Wrong backup format.");saveAdds(b.additions||{});document.getElementById("backupOut").textContent="Restored.";renderHome()}catch(e){document.getElementById("backupOut").textContent="ERROR: "+e.message}
+ try{const b=JSON.parse(document.getElementById("restoreText").value);if(!["ORACLE_PLATO_V3","ORACLE_PLATO_V31"].includes(b.format))throw new Error("Wrong backup format.");saveAdds(b.additions||{});document.getElementById("backupOut").textContent="Restored.";renderHome()}catch(e){document.getElementById("backupOut").textContent="ERROR: "+e.message}
 }
 function clearLocal(){if(confirm("Clear locally-added draws? Embedded histories will remain.")){saveAdds({});document.getElementById("backupOut").textContent="Local additions cleared.";renderHome()}}
 window.addEventListener("load",setup);
