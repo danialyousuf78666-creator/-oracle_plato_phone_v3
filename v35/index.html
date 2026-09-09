@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0c0e">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>PLATO v3.5</title>
+<title>ORACLE / PLATO v3.5</title>
 <style>html,body,iframe{margin:0;width:100%;height:100%;border:0;background:#0b0c0e}iframe{display:block}</style>
 </head>
 <body>
-<iframe id="app" src="../index.html?v35-base-4" title="PLATO v3.5"></iframe>
+<iframe id="app" src="../index.html?legacy=1&v35-base-5" title="ORACLE / PLATO v3.5"></iframe>
 <script>
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=4').catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=5').catch(()=>{});
 const app=document.getElementById('app');
 app.addEventListener('load',()=>{
   const d=app.contentDocument;if(!d)return;
   const base=new URL('../',location.href);
   const load=(path,next)=>{const s=d.createElement('script');s.src=new URL(path,base).href;s.onload=next||null;s.onerror=()=>console.error('PLATO v3.5 failed to load',s.src);d.body.appendChild(s)};
-  load('plato_v32_cooperative.js?v=3.2-internal',()=>load('plato_v34_adaptive_pool.js?v=3.4-internal',()=>load('v35/plato_v35_phone.js?v=3.5-phone-4')));
+  load('plato_v32_cooperative.js?v=3.2-internal',()=>load('plato_v34_adaptive_pool.js?v=3.4-internal',()=>load('v35/plato_v35_phone.js?v=3.5-phone-5',()=>load('v35/prize_coverage.js?v=3.5-coverage-1'))));
 });
 </script>
 </body>
