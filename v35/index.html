@@ -15,8 +15,9 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
 const app=document.getElementById('app');
 app.addEventListener('load',()=>{
   const d=app.contentDocument;if(!d)return;
-  const load=(src,next)=>{const s=d.createElement('script');s.src=src;s.onload=next||null;d.body.appendChild(s)};
-  load('../plato_v32_cooperative.js?v=3.2-frozen',()=>load('../plato_v34_adaptive_pool.js?v=3.4-frozen',()=>load('./plato_v35_phone.js?v=3.5-phone-1')));
+  const base=new URL('../',location.href);
+  const load=(path,next)=>{const s=d.createElement('script');s.src=new URL(path,base).href;s.onload=next||null;s.onerror=()=>console.error('PLATO v3.5 failed to load',s.src);d.body.appendChild(s)};
+  load('plato_v32_cooperative.js?v=3.2-frozen',()=>load('plato_v34_adaptive_pool.js?v=3.4-frozen',()=>load('v35/plato_v35_phone.js?v=3.5-phone-2')));
 });
 </script>
 </body>
