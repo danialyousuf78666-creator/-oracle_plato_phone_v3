@@ -1,0 +1,78 @@
+{
+  "sat": {
+    "name": "Saturday Lotto",
+    "source_id": "5127",
+    "rows": 2079,
+    "current_rows": 2079,
+    "n": 45,
+    "r": 6,
+    "current_start_draw": 553,
+    "latest_draw": 4709,
+    "latest_date": "2026-09-05",
+    "earliest_draw": 553,
+    "earliest_date": "1986-11-08",
+    "sha256": "e95f349e6616cec19ad41b959574beb1d3f0bdc83960c125987b0c92855ced05"
+  },
+  "oz": {
+    "name": "Oz Lotto",
+    "source_id": "5130",
+    "rows": 1699,
+    "current_rows": 226,
+    "n": 47,
+    "r": 7,
+    "current_start_draw": 1474,
+    "latest_draw": 1699,
+    "latest_date": "2026-09-08",
+    "earliest_draw": 1,
+    "earliest_date": "1994-02-22",
+    "sha256": "314841d91b58c8d25f9c8c1ecf8681ee57e6ac7f8398a583ce21358910f4f931"
+  },
+  "pb": {
+    "name": "Powerball",
+    "source_id": "5132",
+    "rows": 1581,
+    "current_rows": 438,
+    "n": 35,
+    "r": 7,
+    "current_start_draw": 1144,
+    "latest_draw": 1581,
+    "latest_date": "2026-09-03",
+    "earliest_draw": 1,
+    "earliest_date": "1996-05-23",
+    "sha256": "64b9d479a2c26dfaa78b649027946e95c4c1d4c6a325ae5ffafa1b8ba799bd08",
+    "bonus_n": 20
+  },
+  "sfl": {
+    "name": "Set for Life",
+    "source_id": "5237",
+    "rows": 4051,
+    "current_rows": 2361,
+    "n": 44,
+    "r": 7,
+    "current_start_draw": 1691,
+    "latest_draw": 4051,
+    "latest_date": "2026-09-08",
+    "earliest_draw": 1,
+    "earliest_date": "2015-08-07",
+    "sha256": "f49c59d8be6a90d60adf3d741fb969dbda862bdc9ca760d2f08c32c6b7bac9d1"
+  },
+  "ww": {
+    "name": "Weekday Windfall",
+    "source_id": "5303",
+    "rows": 361,
+    "current_rows": 361,
+    "n": 45,
+    "r": 6,
+    "current_start_draw": 4392,
+    "latest_draw": 4752,
+    "latest_date": "2026-09-07",
+    "earliest_draw": 4392,
+    "earliest_date": "2024-05-20",
+    "sha256": "912487f8a62d1e55712c034cdc6fe12c132e4482ff81e321de6b2a6054f1b4e9"
+  },
+  "number_one_integrity": {
+    "rows": 2079,
+    "matches_5127_winning_numbers_exactly": true,
+    "sha256": "2d6201dc60a0cef26e96bf09cffb439dd79cb7184eae4615ea664a9afa92477d"
+  }
+}
