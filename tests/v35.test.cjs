@@ -74,10 +74,10 @@ test('Powerball coverage includes all 20 bonus values across 20 tickets',()=>{
 });
 test('root exposes two methods without iframe or legacy controls',()=>{
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
- assert.equal((html.match(/<(?:select|input|button)\b/g)||[]).length,4);
+ assert.equal((html.match(/<(?:select|input|button)\b/g)||[]).length,5);
  assert.doesNotMatch(html,/<iframe|v3\.1|v3\.2|v3\.4|shortlist|backtest|folds|windowSelect/i);
  assert.doesNotMatch(fs.readFileSync(path.join(root,'v35/index.html'),'utf8'),/<iframe/i);
- assert.match(html,/Game<\/label>/);assert.match(html,/Method<\/label>/);assert.match(html,/Astra baseline/);assert.match(html,/PLATO experimental/);assert.match(html,/Ticket count<\/label>/);assert.match(html,/Generate v3\.5/);assert.match(html,/PASS means/);
+ assert.match(html,/Experiment Lab/);assert.match(html,/Run Experiment Lab/);assert.match(html,/Game<\/label>/);assert.match(html,/Method<\/label>/);assert.match(html,/Astra baseline/);assert.match(html,/PLATO experimental/);assert.match(html,/Ticket count<\/label>/);assert.match(html,/Generate v3\.5/);assert.match(html,/PASS means/);
  assert.doesNotMatch(fs.readFileSync(path.join(root,'v35/plato_v35_phone.js'),'utf8'),/compatibleRows\(game\)|PLATO_V34|install\(\)/);
 });
 test('legacy control remains byte-frozen and is not loaded by live scripts',()=>{
