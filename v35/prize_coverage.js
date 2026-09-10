@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-3-possibility';
+const VERSION='3.5-prize-coverage-4-randomness-audit';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
@@ -95,7 +95,8 @@ function portfolio(game,count){
   }
   const possibility=space?PLATO_V35_SPACE.audit(space,spaceState):null;
   const quantumAudit=window.PLATO_V35_SPACE?PLATO_V35_SPACE.quantumAudit(ranked.compatibleRows||ranked.rows,cfg.n):null;
-  return {cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,quantumAudit};
+  const randomnessAudit=window.PLATO_V35_RANDOMNESS?PLATO_V35_RANDOMNESS.audit(game):null;
+  return {cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,quantumAudit,randomnessAudit};
 }
 
 function powerballFor(i,seed){return 1+((seed+i*7)%20)}
@@ -123,9 +124,9 @@ async function run(event){
     output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);
     try{localStorage.setItem(STORE,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),game,count,
-      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history,possibility:res.possibility,quantumAudit:res.quantumAudit}));}catch(_){ }
+      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history,possibility:res.possibility,quantumAudit:res.quantumAudit,randomnessAudit:res.randomnessAudit}));}catch(_){ }
     // Read-only diagnostic state for audit; never exposed as phone controls.
-    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets,possibility:res.possibility,quantumAudit:res.quantumAudit};
+    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets,possibility:res.possibility,quantumAudit:res.quantumAudit,randomnessAudit:res.randomnessAudit};
   }catch(error){summary.textContent=String(error.message||error);}
   finally{btn.disabled=false;btn.textContent='Generate v3.5';}
 }
