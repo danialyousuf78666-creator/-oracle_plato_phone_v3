@@ -1,8 +1,13 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-6-lab-ready';
+const VERSION='3.5-prize-coverage-7-three-mode';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
-const MODES={astra:'Astra baseline',experimental:'PLATO experimental'};
+const MODES={astra:'Astra baseline',experimental:'PLATO experimental',anti_overlap:'Anti-overlap'};
+const MODE_DEFAULTS={
+  astra:{seedOffset:0,possibilityWeight:0,pairNovelWeight:.26,tripleNovelWeight:.10,overlapPenaltyWeight:.12},
+  experimental:{seedOffset:17017,possibilityWeight:.60,pairNovelWeight:.30,tripleNovelWeight:.12,overlapPenaltyWeight:.16},
+  anti_overlap:{seedOffset:29023,possibilityWeight:.40,pairNovelWeight:.38,tripleNovelWeight:.18,overlapPenaltyWeight:.30}
+};
 
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const tripleKey=(a,b,c)=>[a,b,c].sort((x,y)=>x-y).join('-');
@@ -62,9 +67,9 @@ function validatePortfolio(game,count,tickets){
 
 function portfolio(game,count,mode='experimental',options={}){
   if(!GAME_CFG[game]||!Number.isInteger(count)||count<1||count>100)throw new Error('Choose 1–100 whole tickets.');
-  if(!MODES[mode])throw new Error('Choose Astra baseline or PLATO experimental.');
+  if(!MODES[mode])throw new Error('Choose Astra baseline, PLATO experimental, or Anti-overlap.');
   if(!window.PLATO_V35||!PLATO_V35.rank)throw new Error('v3.5 engine is not ready. Reload once.');
-  const experimental=mode==='experimental';
+  const experimental=mode!=='astra',modeDefaults=MODE_DEFAULTS[mode];
   const cfg=GAME_CFG[game],ranked=options.rankedResult||PLATO_V35.rank(game,options),k=coveragePoolK(game,count),pool=ranked.out.slice(0,k);
   const scores=pool.map(x=>Math.max(0.001,x.score||0.001));
   const z=scores.reduce((a,b)=>a+b,0)||1,totalSlots=count*cfg.r,target={},usage={};
@@ -77,11 +82,11 @@ function portfolio(game,count,mode='experimental',options={}){
   const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[];
   const space=experimental&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.createTargets(cfg,count):null;
   const spaceState=space?PLATO_V35_SPACE.createState(space):null;
-  const rng=seeded(gameSeed(game,count,ranked.rows)+(options.seedOffset||0));
-  const pairNovelWeight=Number.isFinite(options.pairNovelWeight)?options.pairNovelWeight:0.26;
-  const tripleNovelWeight=Number.isFinite(options.tripleNovelWeight)?options.tripleNovelWeight:0.10;
-  const overlapPenaltyWeight=Number.isFinite(options.overlapPenaltyWeight)?options.overlapPenaltyWeight:0.12;
-  const possibilityWeight=experimental?(Number.isFinite(options.possibilityWeight)?options.possibilityWeight:0.40):0;
+  const rng=seeded(gameSeed(game,count,ranked.rows)+(Number.isFinite(options.seedOffset)?options.seedOffset:modeDefaults.seedOffset));
+  const pairNovelWeight=Number.isFinite(options.pairNovelWeight)?options.pairNovelWeight:modeDefaults.pairNovelWeight;
+  const tripleNovelWeight=Number.isFinite(options.tripleNovelWeight)?options.tripleNovelWeight:modeDefaults.tripleNovelWeight;
+  const overlapPenaltyWeight=Number.isFinite(options.overlapPenaltyWeight)?options.overlapPenaltyWeight:modeDefaults.overlapPenaltyWeight;
+  const possibilityWeight=experimental?(Number.isFinite(options.possibilityWeight)?options.possibilityWeight:modeDefaults.possibilityWeight):0;
   const attemptsPerTicket=Math.max(28,Math.min(70,k*3));
   for(let t=0;t<count;t++){
     let best=null,bestValue=-1e99;
