@@ -1,4 +1,4 @@
-const BUILD='v35-root-20260910-5';
+const BUILD='v35-root-20260910-6';
 const ROOT=new URL('./',self.location.href);
 const CACHE=`plato-root:${ROOT.pathname}:${BUILD}`;
 const SHELL=new URL('index.html',ROOT).href;
