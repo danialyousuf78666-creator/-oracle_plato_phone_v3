@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-phone-distilled-3-era-aware';
+const VERSION='3.5-phone-distilled-5-patterns-q';
 const STORE='ORACLE_PLATO_V35_PHONE_V2';
 const MAP={pb:'powerball',sat:'saturday',oz:'oz',sfl:'set_for_life',ww:'windfall'};
 const W={
@@ -36,6 +36,77 @@ function rank(game,options={}){
  out.sort((a,b)=>b.score-a.score||a.number-b.number);
  return {rows:history.rows,compatibleRows:rows,weights,out,history:{total:history.rows.length,raw:rows.length,structural:f.structural.draws,eras:history.eraCounts,target:cfg}};
 }
+// Descriptive pattern discovery. Counts are learned separately for each rule era;
+// common/uncommon mean most/least observed, never a prediction of the next draw.
+const PATTERN_LABELS={frequency:'Numbers',recency:'Recent numbers (40 draws)',gaps:'Appearance gaps',pairs:'Pairs',triples:'Triples',position:'Sorted positions',ranges:'Low/middle/high split',parity:'Odd/even split',sum:'TSUM',digital_root:'Set DRoot',adjacency:'Adjacent numbers',transition:'Repeated numbers',temporal:'Month and DRoot',structural:'Set span',pattern_signatures:'Set patterns',feature_interactions:'TSUM, DRoot and parity',regimes:'TSUM movement',q_t:'Q — absolute TSUM difference'};
+function digitalRoot(value){
+ if(!Number.isSafeInteger(value)||value<0)throw new Error('Digital root needs a non-negative whole number.');
+ return value===0?0:1+(value-1)%9;
+}
+function sumDifference(setA,setB){
+ const sum=values=>{
+  if(!Array.isArray(values)||!values.length||values.some(x=>!Number.isSafeInteger(x)||x<1))throw new Error('Q needs two non-empty sets of positive whole numbers.');
+  const total=values.reduce((a,b)=>a+b,0);if(!Number.isSafeInteger(total))throw new Error('Set sum is too large.');return total;
+ };
+ const sumA=sum(setA),sumB=sum(setB),signedDifference=sumA-sumB,q_t=Math.abs(signedDifference);
+ return {sumA,sumB,signedDifference,q_t,qDigitalRoot:digitalRoot(q_t)};
+}
+function describeSet(numbers,n){
+ if(!Array.isArray(numbers)||!numbers.length||numbers.some(x=>!Number.isSafeInteger(x)||x<1||x>n)||new Set(numbers).size!==numbers.length)throw new Error('Invalid number set.');
+ const ordered=[...numbers].sort((a,b)=>a-b),tsum=ordered.reduce((s,x)=>s+x,0),odd=ordered.filter(x=>x%2).length;
+ const ranges=[0,0,0],spacing=[];let adjacentPairs=0,run=1,longestRun=1;
+ ordered.forEach((x,i)=>{ranges[Math.min(2,Math.floor((x-1)*3/n))]++;if(i){const gap=x-ordered[i-1];spacing.push(gap);if(gap===1){adjacentPairs++;run++;}else run=1;longestRun=Math.max(longestRun,run);}});
+ return {numbers:[...numbers],tsum,setDigitalRoot:digitalRoot(tsum),individualDigitalRoots:numbers.map(number=>({number,droot:digitalRoot(number)})),odd,even:ordered.length-odd,ranges,spacing,span:ordered.at(-1)-ordered[0],adjacentPairs,longestRun};
+}
+function setPatterns(metrics,previous,date){
+ const parity=`${metrics.odd} odd / ${metrics.even} even`,ranges=metrics.ranges.join('/'),droot=String(metrics.setDigitalRoot);
+ const keys={ranges,parity,sum:String(metrics.tsum),digital_root:droot,adjacency:`${metrics.adjacentPairs} adjacent pairs; run ${metrics.longestRun}`,structural:String(metrics.span),pattern_signatures:`${parity}; ${ranges}; DRoot ${droot}`,feature_interactions:`${metrics.tsum}; DRoot ${droot}; ${parity}`};
+ if(date)keys.temporal=`month ${date.slice(5,7)}; DRoot ${droot}`;
+ if(previous){keys.transition=String(metrics.numbers.filter(x=>previous.numbers.includes(x)).length);keys.regimes=metrics.tsum>previous.tsum?'rising':metrics.tsum<previous.tsum?'falling':'unchanged';keys.q_t=String(Math.abs(metrics.tsum-previous.tsum));}
+ return keys;
+}
+function patternSummary(counts){
+ const entries=Object.entries(counts).map(([pattern,count])=>({pattern,count})).sort((a,b)=>b.count-a.count||a.pattern.localeCompare(b.pattern));
+ const maximum=entries[0]?.count||0,minimum=entries.at(-1)?.count||0,distinct=maximum>minimum;
+ return {counts,maximum,minimum,common:distinct?entries.filter(x=>x.count===maximum).slice(0,3):[],uncommon:distinct?entries.filter(x=>x.count===minimum).slice(0,3):[],tied:entries.length>0&&!distinct};
+}
+function analysePatterns(game,options={}){
+ const history=options.history||PLATO_HISTORY.historyFor(game,options),buckets=new Map();
+ for(const item of history.annotated){const id=item.era.start;if(!buckets.has(id))buckets.set(id,{era:item.era,rows:[]});buckets.get(id).rows.push(item.row);}
+ const eras={};
+ for(const [start,{era,rows}] of buckets){
+  const counts=Object.fromEntries(Object.keys(PATTERN_LABELS).map(key=>[key,Object.create(null)])),lastSeen=new Map(),sets=[];
+  const bump=(group,key)=>{counts[group][key]=(counts[group][key]||0)+1;};
+  rows.forEach((row,index)=>{
+   const metrics=describeSet(row[2],era.n),ordered=[...row[2]].sort((a,b)=>a-b),keys=setPatterns(metrics,sets.at(-1),row[1]);
+   for(const [group,key] of Object.entries(keys))bump(group,key);
+   ordered.forEach((number,position)=>{
+    bump('frequency',String(number));if(index>=rows.length-40)bump('recency',String(number));
+    bump('position',`${position+1}: ${number}`);
+    if(lastSeen.has(number))bump('gaps',`${number}: ${index-lastSeen.get(number)-1} skipped draws`);
+    lastSeen.set(number,index);
+    for(let j=position+1;j<ordered.length;j++){
+     bump('pairs',`${number} ${ordered[j]}`);
+     for(let k=j+1;k<ordered.length;k++)bump('triples',`${number} ${ordered[j]} ${ordered[k]}`);
+    }
+   });
+   const previous=sets.at(-1),comparison=previous?{...sumDifference(metrics.numbers,previous.numbers),referenceDraw:previous.draw}:null;
+   sets.push({draw:row[0],date:row[1],...metrics,comparison});
+  });
+  eras[start]={era,drawCount:rows.length,sets,groups:Object.fromEntries(Object.entries(counts).map(([key,value])=>[key,{label:PATTERN_LABELS[key],...patternSummary(value)}]))};
+ }
+ const current=eras[history.target.start]||{era:history.target,drawCount:0,sets:[],groups:{}};
+ return {game,totalDraws:history.rows.length,eraCount:buckets.size,eras,current};
+}
+function classifySet(numbers,analysis){
+ const current=analysis.current,metrics=describeSet(numbers,current.era.n),keys=setPatterns(metrics,current.sets.at(-1)),behaviour={};
+ for(const [group,key] of Object.entries(keys)){
+  const known=current.groups[group],count=known?.counts[key]||0;
+  behaviour[group]={pattern:key,count,status:!known||!current.drawCount?'no history':!count?'not observed':known.tied?'tied':count===known.maximum?'common':count===known.minimum?'uncommon':'observed'};
+ }
+ const previous=current.sets.at(-1),comparison=previous?{...sumDifference(numbers,previous.numbers),referenceDraw:previous.draw}:null;
+ return {...metrics,behaviour,comparison};
+}
 function chooseK(game){const cfg=GAME_CFG[game];return Math.max(cfg.r+5,Math.min(18,Math.round(cfg.n/3)))}
 function makePortfolio(game,count){const cfg=GAME_CFG[game],r=rank(game),k=chooseK(game),pool=r.out.slice(0,k),tickets=[],seen=new Set(),used={};pool.forEach(x=>used[x.number]=0);const totalSlots=count*cfg.r;const raw=pool.map(x=>Math.max(.05,x.score));const z=raw.reduce((a,b)=>a+b,0)||1;const target={};pool.forEach((x,i)=>target[x.number]=totalSlots*raw[i]/z);
  for(let t=0;t<count;t++){
@@ -66,5 +137,5 @@ function makePortfolio(game,count){const cfg=GAME_CFG[game],r=rank(game),k=choos
  }
  return {rank:r,k,pool:pool.map(x=>x.number),tickets};
 }
-window.PLATO_V35={VERSION,rank,chooseK,makePortfolio,weights:W,featureSet,methodScore};
+window.PLATO_V35={VERSION,rank,chooseK,makePortfolio,weights:W,featureSet,methodScore,digitalRoot,sumDifference,describeSet,analysePatterns,classifySet};
 })();
