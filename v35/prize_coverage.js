@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-2-root';
+const VERSION='3.5-prize-coverage-3-possibility';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
@@ -60,6 +60,8 @@ function portfolio(game,count){
     usage[item.number]=0;
   });
   const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[];
+  const space=window.PLATO_V35_SPACE?PLATO_V35_SPACE.createTargets(cfg,count):null;
+  const spaceState=space?PLATO_V35_SPACE.createState(space):null;
   const rng=seeded(gameSeed(game,count,ranked.rows));
   const attemptsPerTicket=Math.max(28,Math.min(70,k*3));
   for(let t=0;t<count;t++){
@@ -76,7 +78,8 @@ function portfolio(game,count){
         for(let m=j+1;m<cand.length;m++)tripleNovel+=1/(1+(triples.get(tripleKey(cand[i],cand[j],cand[m]))||0));
       }
       const deficit=cand.reduce((s,x)=>s+(target[x]-(usage[x]||0)),0);
-      const value=1.1*deficit+0.26*pairNovel+0.10*tripleNovel-0.12*overlapPenalty+rng()*0.1;
+      const possibilityScore=space?PLATO_V35_SPACE.scoreTicket(cand,space,spaceState):0;
+      const value=1.1*deficit+0.26*pairNovel+0.10*tripleNovel-0.12*overlapPenalty+0.40*possibilityScore+rng()*0.1;
       if(value>bestValue){bestValue=value;best=cand}
     }
     if(!best){
@@ -88,9 +91,11 @@ function portfolio(game,count){
       }
     }
     if(!best)break;
-    seen.add(best.join('-'));tickets.push(best);updateCounts(best,pairs,triples,usage);
+    seen.add(best.join('-'));tickets.push(best);updateCounts(best,pairs,triples,usage);if(space)PLATO_V35_SPACE.recordTicket(best,space,spaceState);
   }
-  return {cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples};
+  const possibility=space?PLATO_V35_SPACE.audit(space,spaceState):null;
+  const quantumAudit=window.PLATO_V35_SPACE?PLATO_V35_SPACE.quantumAudit(ranked.compatibleRows||ranked.rows,cfg.n):null;
+  return {cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,quantumAudit};
 }
 
 function powerballFor(i,seed){return 1+((seed+i*7)%20)}
@@ -118,9 +123,9 @@ async function run(event){
     output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);
     try{localStorage.setItem(STORE,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),game,count,
-      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history}));}catch(_){ }
+      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history,possibility:res.possibility,quantumAudit:res.quantumAudit}));}catch(_){ }
     // Read-only diagnostic state for audit; never exposed as phone controls.
-    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets};
+    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets,possibility:res.possibility,quantumAudit:res.quantumAudit};
   }catch(error){summary.textContent=String(error.message||error);}
   finally{btn.disabled=false;btn.textContent='Generate v3.5';}
 }
