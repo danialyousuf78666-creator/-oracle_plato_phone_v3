@@ -1,0 +1,31 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const el=()=>({value:'pb',disabled:false,textContent:'',dataset:{},innerHTML:'',appendChild(){},addEventListener(){},reportValidity:()=>true});
+const c=vm.createContext({console,Date,localStorage:{getItem:()=>null,setItem(){}},document:{getElementById:()=>el(),createElement:()=>el(),createDocumentFragment:()=>({appendChild(){}})}});c.window=c;
+for(const f of ['history.js','era_history.js','randomness_diagnostics.js','plato_v35_phone.js','possibility_space.js','prize_coverage.js','experiment_lab.js'])vm.runInContext(fs.readFileSync(path.join(root,'v35',f),'utf8'),c,{filename:f});
+const L=c.PLATO_V35_LAB,C=c.PLATO_V35_COVERAGE;
+
+test('lab exposes fixed altered/blended variants plus random control',()=>{
+ const ids=L.VARIANTS.map(x=>x.id);for(const id of ['astra','space_light','experimental','space_heavy','anti_overlap','blend70','blend50','blend30','random'])assert.ok(ids.includes(id));
+});
+
+test('7-number target selection stays in current era and has enough prior history',()=>{
+ for(const game of ['pb','oz','sfl']){
+  const rows=L.targetRows(game,5);assert.equal(rows.length,5);assert.ok(rows.every(r=>r[2].length===7));
+  for(const target of rows){const ranked=c.PLATO_V35.rank(game,{beforeDraw:target[0]});assert.ok(ranked.rows.length>0);assert.ok(ranked.rows.at(-1)[0]<target[0]);}
+ }
+});
+
+test('portfolio historical option uses only pre-target rows',()=>{
+ const target=L.targetRows('pb',1)[0],p=C.portfolio('pb',5,'experimental',{beforeDraw:target[0],skipDiagnostics:true});
+ assert.ok(p.ranked.rows.at(-1)[0]<target[0]);assert.equal(p.validation.pass,true);assert.equal(p.tickets.length,5);
+});
+
+test('lab walk-forward benchmark scores exact first then 5+ then 4+ and all variants stay valid',()=>{
+ const b=L.benchmark('pb',5,{folds:2});assert.equal(b.folds,2);assert.equal(b.pass,true);assert.deepEqual(Array.from(b.scoreOrder.slice(0,3)),['7/7','5+/7','4+/7']);
+ assert.equal(b.results.length,L.VARIANTS.length);for(const r of b.results){assert.equal(r.valid,true);assert.equal(r.folds,2);assert.ok(r.exact>=0&&r.exact<=2);assert.ok(r.atLeast5>=r.exact);assert.ok(r.atLeast4>=r.atLeast5);}
+});
+
+test('lab hit scorer recognizes 7/7, 5/7 and 4/7 exactly',()=>{
+ const target=[1,2,3,4,5,6,7];assert.equal(L.bestHit([[1,2,3,4,5,6,7]],target),7);assert.equal(L.bestHit([[1,2,3,4,5,20,21]],target),5);assert.equal(L.bestHit([[1,2,3,4,20,21,22]],target),4);
+});
