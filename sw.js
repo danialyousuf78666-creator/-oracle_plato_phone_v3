@@ -1,8 +1,8 @@
-const BUILD='v35-root-20260910-4';
+const BUILD='v35-root-20260910-5';
 const ROOT=new URL('./',self.location.href);
 const CACHE=`plato-root:${ROOT.pathname}:${BUILD}`;
 const SHELL=new URL('index.html',ROOT).href;
-const ASSETS=['index.html','manifest.webmanifest',...['history.js','era_history.js','randomness_diagnostics.js','plato_v35_phone.js','possibility_space.js','prize_coverage.js'].map(x=>`v35/${x}?build=${BUILD}`)].map(x=>new URL(x,ROOT).href);
+const ASSETS=['index.html','manifest.webmanifest',...['history.js','era_history.js','randomness_diagnostics.js','plato_v35_phone.js','possibility_space.js','prize_coverage.js','experiment_lab.js'].map(x=>`v35/${x}?build=${BUILD}`)].map(x=>new URL(x,ROOT).href);
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
   await cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'})));
