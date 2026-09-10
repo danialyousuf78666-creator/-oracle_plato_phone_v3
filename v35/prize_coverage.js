@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-2-root';
+const VERSION='3.5-prize-coverage-3-patterns';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
@@ -99,28 +99,56 @@ function formatTicket(game,ticket,i,seed){
   return game==='pb'?`${main}   PB ${String(powerballFor(i,seed)).padStart(2,'0')}`:main;
 }
 
+function renderPatterns(analysis){
+ let panel=document.getElementById('v35Patterns');
+ if(!panel){panel=document.createElement('section');panel.id='v35Patterns';document.getElementById('v35Tickets').after(panel);}
+ panel.replaceChildren();panel.hidden=false;
+ const title=document.createElement('h2');title.textContent='Common and uncommon patterns';panel.appendChild(title);
+ const note=document.createElement('p');note.className='note';
+ note.textContent=`${analysis.totalDraws} stored draws analysed. Counts below use the ${analysis.current.drawCount} draws under current rules. Common = most observed; uncommon = least observed. Tied patterns stay unclassified.`;
+ panel.appendChild(note);
+ for(const group of Object.values(analysis.current.groups)){
+  const row=document.createElement('p'),label=document.createElement('strong');label.textContent=group.label;row.appendChild(label);
+  const text=group.tied?'All observed patterns have equal counts.':!group.common.length?'Not enough observations.':`Common: ${group.common.map(x=>`${x.pattern} (${x.count})`).join(', ')}\nUncommon: ${group.uncommon.map(x=>`${x.pattern} (${x.count})`).join(', ')}`;
+  const body=document.createElement('span');body.style.display='block';body.style.whiteSpace='pre-line';body.textContent=text;row.appendChild(body);panel.appendChild(row);
+ }
+}
+
 async function run(event){
   if(event)event.preventDefault();
   const form=document.getElementById('v35Form');if(!form.reportValidity())return;
   const game=document.getElementById('v35Game').value,count=Number(document.getElementById('v35Count').value);
   const btn=document.getElementById('v35Generate'),summary=document.getElementById('v35Summary'),output=document.getElementById('v35Tickets');
   if(btn.disabled)return;btn.disabled=true;btn.textContent='Generating…';summary.textContent='';output.replaceChildren();
+  const previousPatterns=document.getElementById('v35Patterns');if(previousPatterns)previousPatterns.hidden=true;
   await new Promise(resolve=>setTimeout(resolve,0));
   try{
     const res=portfolio(game,count),seed=gameSeed(game,count,res.ranked.rows);
     if(res.tickets.length!==count)throw new Error('Could not complete this ticket count. Try a smaller count.');
     summary.textContent=`${GAME_CFG[game].name} · ${res.tickets.length} tickets`;
+    const patterns=PLATO_V35.analysePatterns(game,{rows:res.ranked.rows}),setDetails=res.tickets.map(ticket=>PLATO_V35.classifySet(ticket,patterns));
     const fragment=document.createDocumentFragment();
-    res.tickets.forEach((ticket,i)=>{const item=document.createElement('li');item.className='ticket';item.textContent=formatTicket(game,ticket,i,seed);fragment.appendChild(item);});
+    res.tickets.forEach((ticket,i)=>{
+      const item=document.createElement('li'),details=setDetails[i];item.className='ticket';item.textContent=formatTicket(game,ticket,i,seed);
+      const stats=document.createElement('span');stats.style.display='block';stats.style.fontSize='12px';stats.style.color='#b9c2ce';
+      stats.textContent=`Main TSUM: ${details.tsum} · Set DRoot: ${details.setDigitalRoot}\nNumber DRoots: ${details.individualDigitalRoots.map(x=>`${x.number}→${x.droot}`).join(' ')}`;
+      for(const status of ['common','uncommon','not observed']){
+        const labels=Object.entries(details.behaviour).filter(([,value])=>value.status===status).map(([key])=>patterns.current.groups[key].label);
+        if(labels.length)stats.textContent+=`\n${status[0].toUpperCase()+status.slice(1)}: ${labels.join(', ')}`;
+      }
+      if(game==='pb')stats.textContent+=`\nPB DRoot: ${PLATO_V35.digitalRoot(powerballFor(i,seed))}`;
+      item.appendChild(stats);fragment.appendChild(item);
+    });
     output.appendChild(fragment);
+    renderPatterns(patterns);
     output.dataset.historyTotal=String(res.ranked.history.total);
     output.dataset.rawDraws=String(res.ranked.history.raw);
     output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);
     try{localStorage.setItem(STORE,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),game,count,
-      pool:res.pool,tickets:res.tickets,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history}));}catch(_){ }
+      pool:res.pool,tickets:res.tickets,setDetails,powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,seed)):[],history:res.ranked.history}));}catch(_){ }
     // Read-only diagnostic state for audit; never exposed as phone controls.
-    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets};
+    window.PLATO_LAST_GENERATION={version:VERSION,game,count,history:res.ranked.history,tickets:res.tickets,setDetails,patterns};
   }catch(error){summary.textContent=String(error.message||error);}
   finally{btn.disabled=false;btn.textContent='Generate v3.5';}
 }
