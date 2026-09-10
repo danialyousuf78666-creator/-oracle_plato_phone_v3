@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-5-two-mode';
+const VERSION='3.5-prize-coverage-6-lab-ready';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 const MODES={astra:'Astra baseline',experimental:'PLATO experimental'};
 
@@ -60,23 +60,28 @@ function validatePortfolio(game,count,tickets){
   return {pass:true,reason:'ok'};
 }
 
-function portfolio(game,count,mode='experimental'){
+function portfolio(game,count,mode='experimental',options={}){
   if(!GAME_CFG[game]||!Number.isInteger(count)||count<1||count>100)throw new Error('Choose 1–100 whole tickets.');
   if(!MODES[mode])throw new Error('Choose Astra baseline or PLATO experimental.');
   if(!window.PLATO_V35||!PLATO_V35.rank)throw new Error('v3.5 engine is not ready. Reload once.');
   const experimental=mode==='experimental';
-  const cfg=GAME_CFG[game],ranked=PLATO_V35.rank(game),k=coveragePoolK(game,count),pool=ranked.out.slice(0,k);
+  const cfg=GAME_CFG[game],ranked=options.rankedResult||PLATO_V35.rank(game,options),k=coveragePoolK(game,count),pool=ranked.out.slice(0,k);
   const scores=pool.map(x=>Math.max(0.001,x.score||0.001));
   const z=scores.reduce((a,b)=>a+b,0)||1,totalSlots=count*cfg.r,target={},usage={};
+  const rankedMix=clamp(options.rankedShare==null?0.30:Number(options.rankedShare),0,1);
   pool.forEach((item,i)=>{
     const uniform=1/pool.length,rankedShare=scores[i]/z;
-    target[item.number]=totalSlots*(0.70*uniform+0.30*rankedShare);
+    target[item.number]=totalSlots*((1-rankedMix)*uniform+rankedMix*rankedShare);
     usage[item.number]=0;
   });
   const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[];
   const space=experimental&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.createTargets(cfg,count):null;
   const spaceState=space?PLATO_V35_SPACE.createState(space):null;
-  const rng=seeded(gameSeed(game,count,ranked.rows));
+  const rng=seeded(gameSeed(game,count,ranked.rows)+(options.seedOffset||0));
+  const pairNovelWeight=Number.isFinite(options.pairNovelWeight)?options.pairNovelWeight:0.26;
+  const tripleNovelWeight=Number.isFinite(options.tripleNovelWeight)?options.tripleNovelWeight:0.10;
+  const overlapPenaltyWeight=Number.isFinite(options.overlapPenaltyWeight)?options.overlapPenaltyWeight:0.12;
+  const possibilityWeight=experimental?(Number.isFinite(options.possibilityWeight)?options.possibilityWeight:0.40):0;
   const attemptsPerTicket=Math.max(28,Math.min(70,k*3));
   for(let t=0;t<count;t++){
     let best=null,bestValue=-1e99;
@@ -93,7 +98,7 @@ function portfolio(game,count,mode='experimental'){
       }
       const deficit=cand.reduce((s,x)=>s+(target[x]-(usage[x]||0)),0);
       const possibilityScore=space?PLATO_V35_SPACE.scoreTicket(cand,space,spaceState):0;
-      const value=1.1*deficit+0.26*pairNovel+0.10*tripleNovel-0.12*overlapPenalty+(experimental?0.40*possibilityScore:0)+rng()*0.1;
+      const value=1.1*deficit+pairNovelWeight*pairNovel+tripleNovelWeight*tripleNovel-overlapPenaltyWeight*overlapPenalty+possibilityWeight*possibilityScore+rng()*0.1;
       if(value>bestValue){bestValue=value;best=cand}
     }
     if(!best){
@@ -108,10 +113,10 @@ function portfolio(game,count,mode='experimental'){
     seen.add(best.join('-'));tickets.push(best);updateCounts(best,pairs,triples,usage);if(space)PLATO_V35_SPACE.recordTicket(best,space,spaceState);
   }
   const possibility=space?PLATO_V35_SPACE.audit(space,spaceState):null;
-  const quantumAudit=experimental&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.quantumAudit(ranked.compatibleRows||ranked.rows,cfg.n):null;
-  const randomnessAudit=experimental&&window.PLATO_V35_RANDOMNESS?PLATO_V35_RANDOMNESS.audit(game):null;
+  const quantumAudit=experimental&&!options.skipDiagnostics&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.quantumAudit(ranked.compatibleRows||ranked.rows,cfg.n):null;
+  const randomnessAudit=experimental&&!options.skipDiagnostics&&window.PLATO_V35_RANDOMNESS?PLATO_V35_RANDOMNESS.audit(game,options):null;
   const validation=validatePortfolio(game,count,tickets);
-  return {mode,modeLabel:MODES[mode],cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,quantumAudit,randomnessAudit,validation};
+  return {mode,modeLabel:MODES[mode],cfg,ranked,k,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,quantumAudit,randomnessAudit,validation,options:{rankedShare:rankedMix,pairNovelWeight,tripleNovelWeight,overlapPenaltyWeight,possibilityWeight}};
 }
 
 function compare(game,count){
