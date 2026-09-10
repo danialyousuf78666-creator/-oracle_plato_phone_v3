@@ -9,12 +9,12 @@ function harness(){
   if(!stores.has(k))stores.set(k,new Map());const s=stores.get(k);
   return {addAll:async reqs=>{for(const r of reqs)s.set(r.url,new Response('asset'));},keys:async()=>[...s.keys()].map(url=>({url})),match:async r=>s.get(typeof r==='string'?r:r.url),put:async(r,v)=>s.set(typeof r==='string'?r:r.url,v)};
  }};
- const context={URL,Request,Response,caches,fetch:async()=>new Response('<meta content="v35-root-20260909-1">'),self:{location:{href:root+'sw.js'},addEventListener:(n,fn)=>handlers[n]=fn,skipWaiting:async()=>{skipped=true;},clients:{claim:async()=>{claimed=true;}}}};
+ const context={URL,Request,Response,caches,fetch:async()=>new Response('<meta content="v35-root-20260910-2">'),self:{location:{href:root+'sw.js'},addEventListener:(n,fn)=>handlers[n]=fn,skipWaiting:async()=>{skipped=true;},clients:{claim:async()=>{claimed=true;}}}};
  vm.runInNewContext(fs.readFileSync('sw.js','utf8'),context);
  return {root,stores,caches,context,get claimed(){return claimed;},get skipped(){return skipped;},life:async n=>{let p;handlers[n]({waitUntil:v=>p=v});await p;},request:async(path,mode='navigate')=>{let p;handlers.fetch({request:{url:new URL(path,root).href,method:'GET',mode},respondWith:v=>p=v});return p;}};
 }
 test('worker preloads complete release before activation and only removes scoped old caches',async()=>{
- const h=harness();await h.life('install');assert.equal(h.skipped,true);assert.equal([...h.stores.values()][0].size,6);
+ const h=harness();await h.life('install');assert.equal(h.skipped,true);assert.equal([...h.stores.values()][0].size,7);
  await (await h.caches.open('oracle-plato-old')).put(h.root+'index.html',new Response('old'));
  await (await h.caches.open('oracle-plato-other')).put('https://example.com/other/index.html',new Response('other'));
  await h.life('activate');assert.equal(h.claimed,true);assert.equal(h.stores.has('oracle-plato-old'),false);assert.equal(h.stores.has('oracle-plato-other'),true);
