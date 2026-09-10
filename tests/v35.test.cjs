@@ -3,8 +3,8 @@ const root=path.resolve(__dirname,'..'),plain=x=>JSON.parse(JSON.stringify(x));
 const element=()=>({value:'sat',disabled:false,textContent:'',dataset:{},appendChild(){},addEventListener(){},reportValidity:()=>true});
 const context=vm.createContext({console,Date,localStorage:{getItem:()=>null},document:{getElementById:()=>element(),createElement:()=>element()}});
 context.window=context;
-for(const name of ['history.js','era_history.js','plato_v35_phone.js','prize_coverage.js'])vm.runInContext(fs.readFileSync(path.join(root,'v35',name),'utf8'),context,{filename:name});
-const H=context.PLATO_HISTORY,E=context.PLATO_V35,C=context.PLATO_V35_COVERAGE,D=context.PLATO_DATA;
+for(const name of ['history.js','era_history.js','plato_v35_phone.js','possibility_space.js','prize_coverage.js'])vm.runInContext(fs.readFileSync(path.join(root,'v35',name),'utf8'),context,{filename:name});
+const H=context.PLATO_HISTORY,E=context.PLATO_V35,C=context.PLATO_V35_COVERAGE,S=context.PLATO_V35_SPACE,D=context.PLATO_DATA;
 test('all 9,771 valid supplied draws enter structural inference; identities stay in correct eras',()=>{
  const expected={pb:[1581,438],sat:[2079,2079],oz:[1699,226],sfl:[4051,2361],ww:[361,361]};
  let total=0;for(const [key,[all,raw]] of Object.entries(expected)){
@@ -53,6 +53,17 @@ test('Prize Coverage generates requested valid unique tickets for every game',()
  assert.equal(C.portfolio('pb',100).tickets.length,100);
  assert.throws(()=>C.portfolio('sat',2.5),/whole tickets/);
  assert.throws(()=>C.portfolio('sat',0),/whole tickets/);
+});
+
+test('Possibility Space uses exact combination counts without banning any legal number',()=>{
+ assert.equal(S.choose(14,6),3003);assert.equal(S.choose(45,6),8145060);assert.equal(S.choose(35,7),6724520);
+ const cfg=D.GAME_CFG.sat,t=S.createTargets(cfg,20),m6=t.families.find(x=>x.id==='multiple6'),m7=t.families.find(x=>x.id==='multiple7');
+ assert.equal(m6.members,7);assert.equal(m7.members,6);
+ assert.equal(m6.distribution.counts.reduce((a,b)=>a+b,0),S.choose(cfg.n,cfg.r));
+ assert.equal(m7.distribution.counts.reduce((a,b)=>a+b,0),S.choose(cfg.n,cfg.r));
+ const result=C.portfolio('sat',20);assert.ok(result.possibility);assert.equal(result.possibility.tickets,20);
+ assert.ok(result.tickets.flat().some(x=>x%6!==0&&x%7!==0),'non-family numbers remain fully legal');
+ assert.equal(result.quantumAudit.enabledWeight,0);
 });
 test('Powerball coverage includes all 20 bonus values across 20 tickets',()=>{
  const values=Array.from({length:20},(_,i)=>C.formatTicket('pb',[1,2,3,4,5,6,7],i,51).split('PB ')[1]);assert.equal(new Set(values).size,20);
