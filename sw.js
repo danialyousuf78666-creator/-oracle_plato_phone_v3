@@ -1,11 +1,10 @@
-const BUILD='v35-root-20260910-3';
+const BUILD='v35-root-20260910-4';
 const ROOT=new URL('./',self.location.href);
 const CACHE=`plato-root:${ROOT.pathname}:${BUILD}`;
 const SHELL=new URL('index.html',ROOT).href;
 const ASSETS=['index.html','manifest.webmanifest',...['history.js','era_history.js','randomness_diagnostics.js','plato_v35_phone.js','possibility_space.js','prize_coverage.js'].map(x=>`v35/${x}?build=${BUILD}`)].map(x=>new URL(x,ROOT).href);
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
-  // Atomic activation: a missing asset prevents replacement of the working worker.
   await cache.addAll(ASSETS.map(url=>new Request(url,{cache:'reload'})));
   await self.skipWaiting();
 })()));
@@ -22,7 +21,6 @@ self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   if(request.method!=='GET'||url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname))return;
   if(request.mode==='navigate'){
-    // A bookmarked old path converges on the one root app, never an iframe.
     if(url.pathname.startsWith(new URL('v35/',ROOT).pathname)){
       event.respondWith(Promise.resolve(Response.redirect(ROOT.href,302)));return;
     }
@@ -31,7 +29,6 @@ self.addEventListener('fetch',event=>{
       try{
         const response=await fetch(request,{cache:'no-store'});
         if(!response.ok)throw new Error('Navigation unavailable');
-        // Preserve a coherent offline release while a newer worker installs.
         const html=await response.clone().text();
         if(html.includes(`content="${BUILD}"`)){const cache=await caches.open(CACHE);await cache.put(SHELL,response.clone());}
         return response;
