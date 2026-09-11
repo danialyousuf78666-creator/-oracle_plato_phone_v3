@@ -1,17 +1,10 @@
 (function(){
 'use strict';
-const VERSION='3.5-experiment-lab-2-deterministic-control';
+const VERSION='3.5-experiment-lab-3-two-systems';
 const DEFAULT_FOLDS=10;
 const VARIANTS=[
   {id:'astra',label:'Astra baseline',kind:'portfolio',mode:'astra',options:{}},
-  {id:'space_light',label:'Space light',kind:'portfolio',mode:'experimental',options:{possibilityWeight:.20}},
-  {id:'experimental',label:'PLATO experimental',kind:'portfolio',mode:'experimental',options:{possibilityWeight:.65}},
-  {id:'space_heavy',label:'Space heavy',kind:'portfolio',mode:'experimental',options:{possibilityWeight:.80}},
-  {id:'anti_overlap',label:'Anti-overlap',kind:'portfolio',mode:'anti_overlap',options:{}},
-  {id:'blend70',label:'70% Astra / 30% Experimental',kind:'blend',astraShare:.70},
-  {id:'blend50',label:'50% Astra / 50% Experimental',kind:'blend',astraShare:.50},
-  {id:'blend30',label:'30% Astra / 70% Experimental',kind:'blend',astraShare:.30},
-  {id:'systematic',label:'Systematic neutral control',kind:'systematic'}
+  {id:'experimental',label:'PLATO + Anti-overlap',kind:'portfolio',mode:'experimental',options:{}}
 ];
 function hitCount(ticket,target){const set=new Set(target);let c=0;for(const x of ticket)if(set.has(x))c++;return c}
 function bestHit(tickets,target){let best=0;for(const ticket of tickets)best=Math.max(best,hitCount(ticket,target));return best}

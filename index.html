@@ -4,26 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0c0e">
-<meta name="plato-build" content="v35-root-20260910-9-deterministic">
+<meta name="plato-build" content="v35-root-20260911-10-two-systems">
 <link rel="manifest" href="./manifest.webmanifest">
 <title>PLATO v3.5</title>
 <style>
 :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b0c0e;color:#f4f6f8}*{box-sizing:border-box}body{margin:0}main{max-width:520px;margin:auto;padding:max(28px,env(safe-area-inset-top)) 20px calc(32px + env(safe-area-inset-bottom))}h1{font-size:28px;margin:0 0 8px;letter-spacing:-.7px}.mode{font-size:13px;color:#9da5af;margin:0 0 28px}form{background:#15181c;border:1px solid #2a3038;border-radius:18px;padding:20px}label{display:block;font-size:14px;margin:0 0 8px}select,input{display:block;width:100%;min-height:48px;font:inherit;font-size:17px;color:inherit;background:#0d0f12;border:1px solid #3a414b;border-radius:10px;padding:12px;margin-bottom:22px}button{width:100%;min-height:50px;border:0;border-radius:10px;padding:14px;font:inherit;font-weight:700;font-size:17px;background:#f4f6f8;color:#111}button:disabled{opacity:.55}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #85b7ff;outline-offset:3px}#v35Summary{font-size:14px;line-height:1.5;margin:22px 0 10px}ol{padding:0;list-style-position:inside;margin:0}.ticket{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:clamp(11px,3.5vw,16px);line-height:1.6;background:#15181c;border:1px solid #2a3038;border-radius:10px;padding:13px 10px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}.note{color:#9da5af;font-size:12px;line-height:1.5;margin-top:24px}details{margin-top:22px;background:#15181c;border:1px solid #2a3038;border-radius:18px;padding:16px}summary{cursor:pointer;font-weight:700}#v35RunLab{margin-top:16px}.labscroll{overflow:auto;margin-top:14px}table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}th,td{text-align:left;padding:8px;border-bottom:1px solid #2a3038}.labnote{color:#9da5af;font-size:11px;line-height:1.45}
 </style>
-<script defer src="./v35/history.js?build=v35-root-20260910-9-deterministic"></script>
-<script defer src="./v35/era_history.js?build=v35-root-20260910-9-deterministic"></script>
-<script defer src="./v35/plato_v35_phone.js?build=v35-root-20260910-9-deterministic"></script>
-<script defer src="./v35/possibility_space.js?build=v35-root-20260910-9-deterministic"></script>
-<script defer src="./v35/prize_coverage.js?build=v35-root-20260910-9-deterministic"></script>
-<script defer src="./v35/experiment_lab.js?build=v35-root-20260910-9-deterministic"></script>
+<script defer src="./v35/history.js?build=v35-root-20260911-10-two-systems"></script>
+<script defer src="./v35/era_history.js?build=v35-root-20260911-10-two-systems"></script>
+<script defer src="./v35/plato_v35_phone.js?build=v35-root-20260911-10-two-systems"></script>
+<script defer src="./v35/possibility_space.js?build=v35-root-20260911-10-two-systems"></script>
+<script defer src="./v35/prize_coverage.js?build=v35-root-20260911-10-two-systems"></script>
+<script defer src="./v35/experiment_lab.js?build=v35-root-20260911-10-two-systems"></script>
 </head>
 <body>
 <main>
 <h1>PLATO v3.5</h1>
-<p class="mode">Deterministic internal generation · three-mode comparison</p>
+<p class="mode">Deterministic internal generation · two-system comparison</p>
 <form id="v35Form">
 <label for="v35Game">Game</label><select id="v35Game" required></select>
-<label for="v35Method">Method</label><select id="v35Method" required><option value="astra">Astra baseline</option><option value="experimental">PLATO experimental</option><option value="anti_overlap">Anti-overlap</option></select>
+<label for="v35Method">Method</label><select id="v35Method" required><option value="astra">Astra baseline</option><option value="experimental">PLATO + Anti-overlap</option></select>
 <label for="v35Count">Ticket count</label><input id="v35Count" type="number" inputmode="numeric" min="1" max="100" step="1" value="20" required>
 <button id="v35Generate" type="submit" disabled>Generate v3.5</button>
 </form>
@@ -32,7 +32,7 @@
 <p class="note">Live tickets are generated deterministically from PLATO's era-aware ranking, candidate-pool allocation, coverage and overlap rules. No random jitter is used. Historical pattern labels are descriptive only. PASS means software validity only; no predictive edge has been established prospectively.</p>
 <details id="v35Lab">
 <summary>Experiment Lab</summary>
-<p class="note">Chronological walk-forward comparison of Astra, altered possibility weights, anti-overlap construction, blends, and a deterministic systematic control. The control is benchmark-only and never feeds live tickets.</p>
+<p class="note">Compare Astra with PLATO + Anti-overlap using the selected game and ticket count.</p>
 <button id="v35RunLab" type="button">Run Experiment Lab</button>
 <p id="v35LabSummary" role="status" aria-live="polite"></p>
 <div id="v35LabResults"></div>

@@ -1,12 +1,11 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-10-deterministic-internal';
+const VERSION='3.5-prize-coverage-11-two-systems';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
-const MODES={astra:'Astra baseline',experimental:'PLATO experimental',anti_overlap:'Anti-overlap'};
+const MODES={astra:'Astra baseline',experimental:'PLATO + Anti-overlap'};
 const MODE_DEFAULTS={
   astra:{poolExtra:0,rankedShare:.30,possibilityWeight:0,pairNovelWeight:.26,tripleNovelWeight:.10,overlapPenaltyWeight:.12,phaseStep:3},
-  experimental:{poolExtra:4,rankedShare:.24,possibilityWeight:.65,pairNovelWeight:.32,tripleNovelWeight:.13,overlapPenaltyWeight:.18,phaseStep:5},
-  anti_overlap:{poolExtra:8,rankedShare:.15,possibilityWeight:.30,pairNovelWeight:.46,tripleNovelWeight:.22,overlapPenaltyWeight:.42,phaseStep:7}
+  experimental:{poolExtra:8,rankedShare:.24,possibilityWeight:.65,pairNovelWeight:.46,tripleNovelWeight:.22,overlapPenaltyWeight:.42,phaseStep:7}
 };
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const tripleKey=(a,b,c)=>[a,b,c].sort((x,y)=>x-y).join('-');
@@ -77,7 +76,7 @@ function validatePortfolio(game,count,tickets){
 }
 function portfolio(game,count,mode='experimental',options={}){
   if(!GAME_CFG[game]||!Number.isInteger(count)||count<1||count>100)throw new Error('Choose 1–100 whole tickets.');
-  if(!MODES[mode])throw new Error('Choose Astra baseline, PLATO experimental, or Anti-overlap.');
+  if(!MODES[mode])throw new Error('Choose Astra baseline or PLATO + Anti-overlap.');
   if(!window.PLATO_V35||!PLATO_V35.rank)throw new Error('v3.5 engine is not ready. Reload once.');
   const experimental=mode!=='astra',d=MODE_DEFAULTS[mode],cfg=GAME_CFG[game];
   const ranked=options.rankedResult||PLATO_V35.rank(game,options),baseK=coveragePoolK(game,count),picked=modePool(ranked,cfg,baseK,mode,options),k=picked.k,pool=picked.pool;
@@ -116,18 +115,19 @@ function portfolio(game,count,mode='experimental',options={}){
   }
   const possibility=space?PLATO_V35_SPACE.audit(space,spaceState):null;
   const validation=validatePortfolio(game,count,tickets);
+  const coverageTheorem=validation.pass&&window.PLATO_V35_SPACE?{...PLATO_V35_SPACE.coverageTheorem(cfg,tickets),uniquePairs:pairs.size,uniqueTriples:triples.size}:null;
   const generationAudit={
     deterministic:true,blindRandom:false,
     basis:['era-aware v3.5 ranking','candidate-pool allocation','pair/triple coverage','overlap control',...(experimental?['possibility-space coverage']:[])],
     historyDraws:ranked.history.total,currentEraDraws:ranked.history.raw,candidatePool:k
   };
   return {mode,modeLabel:MODES[mode],cfg,ranked,k,baseK,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,
-    quantumAudit:null,randomnessAudit:null,validation,generationAudit,
+    quantumAudit:null,randomnessAudit:null,validation,generationAudit,coverageTheorem,
     options:{poolExtra:k-baseK,rankedShare:rankedMix,phaseStep,...weights}};
 }
 function compare(game,count){
-  const astra=portfolio(game,count,'astra'),experimental=portfolio(game,count,'experimental'),antiOverlap=portfolio(game,count,'anti_overlap');
-  return {game,count,astra,experimental,antiOverlap,pass:astra.validation.pass&&experimental.validation.pass&&antiOverlap.validation.pass};
+  const astra=portfolio(game,count,'astra'),experimental=portfolio(game,count,'experimental');
+  return {game,count,astra,experimental,pass:astra.validation.pass&&experimental.validation.pass};
 }
 function powerballFor(i,ranked){
   const top=ranked?.out?.[0]?.number||1,raw=ranked?.history?.raw||0,total=ranked?.history?.total||0;
@@ -138,13 +138,17 @@ function formatTicket(game,ticket,i,ranked){
   const main=ticket.map(x=>String(x).padStart(2,'0')).join(' ');
   return game==='pb'?`${main}   PB ${String(powerballFor(i,ranked)).padStart(2,'0')}`:main;
 }
-function renderPatterns(analysis){
+function renderPatterns(analysis,theorem){
   let panel=document.getElementById('v35Patterns');
   if(!panel){panel=document.createElement('section');panel.id='v35Patterns';document.getElementById('v35Tickets').after(panel)}
   panel.replaceChildren();panel.hidden=false;
   const title=document.createElement('h2');title.textContent='Common and uncommon patterns';panel.appendChild(title);
   const note=document.createElement('p');note.className='note';
   note.textContent=`${analysis.totalDraws} stored draws analysed. Counts use the ${analysis.current.drawCount} draws under current rules. These are descriptive historical patterns only; they do not claim predictive power.`;panel.appendChild(note);
+  if(theorem){
+    const info=document.createElement('p');info.className='note';
+    info.textContent=`Coverage theorem: ${theorem.uniqueTickets} unique sets; exact ${theorem.r}/${theorem.r} main-number match chance ${(theorem.exactMainMatchProbability*100).toPrecision(3)}% under a uniform draw. ${theorem.uniquePairs} unique pairs and ${theorem.uniqueTriples} unique triples covered. Main numbers only; this is a chance baseline, not a predictive edge.`;panel.appendChild(info);
+  }
   for(const group of Object.values(analysis.current.groups)){
     const row=document.createElement('p'),label=document.createElement('strong');label.textContent=group.label;row.appendChild(label);
     const text=group.tied?'All observed patterns have equal counts.':!group.common.length?'Not enough observations.':`Common: ${group.common.map(x=>`${x.pattern} (${x.count})`).join(', ')}\nUncommon: ${group.uncommon.map(x=>`${x.pattern} (${x.count})`).join(', ')}`;
@@ -174,11 +178,11 @@ async function run(event){
       if(game==='pb')stats.textContent+=`\nPB: deterministic coverage · DRoot ${PLATO_V35.digitalRoot(powerballFor(i,res.ranked))}`;
       item.appendChild(stats);fragment.appendChild(item);
     });
-    output.appendChild(fragment);renderPatterns(patterns);
+    output.appendChild(fragment);renderPatterns(patterns,res.coverageTheorem);
     output.dataset.historyTotal=String(res.ranked.history.total);output.dataset.rawDraws=String(res.ranked.history.raw);output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);output.dataset.mode=res.mode;output.dataset.validation='PASS';output.dataset.pool=res.pool.join(',');output.dataset.deterministic='true';
     const payload={version:VERSION,createdAt:new Date().toISOString(),game,mode,count,pool:res.pool,tickets:res.tickets,setDetails,
-      powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,res.ranked)):[],history:res.ranked.history,possibility:res.possibility,generationAudit:res.generationAudit,validation:res.validation};
+      powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,res.ranked)):[],history:res.ranked.history,possibility:res.possibility,generationAudit:res.generationAudit,coverageTheorem:res.coverageTheorem,validation:res.validation};
     try{localStorage.setItem(STORE,JSON.stringify(payload))}catch(_){}
     window.PLATO_LAST_GENERATION={...payload,patterns};
   }catch(error){summary.textContent=String(error.message||error)}finally{btn.disabled=false;btn.textContent='Generate v3.5'}

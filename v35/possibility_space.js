@@ -1,12 +1,30 @@
 (function(){
 'use strict';
-const VERSION='3.5-possibility-space-1';
+const VERSION='3.5-possibility-space-2-coverage-theorem';
 
 function choose(n,k){
   if(!Number.isInteger(n)||!Number.isInteger(k)||n<0||k<0||k>n)return 0;
   k=Math.min(k,n-k);let out=1;
   for(let i=1;i<=k;i++)out=out*(n-k+i)/i;
   return Math.round(out);
+}
+// Hypergeometric matching theorem; unique exact-match events are disjoint.
+// P(H=j)=C(r,j)C(n-r,r-j)/C(n,r). Partial-match union bounds are not
+// exact portfolio probabilities, because different tickets can win together.
+function coverageTheorem(cfg,tickets){
+  const {n,r}=cfg,total=choose(n,r);
+  if(!total||!Array.isArray(tickets))throw new Error('Invalid coverage inputs.');
+  const seen=new Set();
+  for(const ticket of tickets){
+    if(!Array.isArray(ticket)||ticket.length!==r||new Set(ticket).size!==r||ticket.some(x=>!Number.isInteger(x)||x<1||x>n))throw new Error('Invalid coverage ticket.');
+    seen.add([...ticket].sort((a,b)=>a-b).join('-'));
+  }
+  const count=seen.size,matchProbabilities=Array.from({length:r+1},(_,j)=>choose(r,j)*choose(n-r,r-j)/total);
+  const atLeastUnionUpperBounds=matchProbabilities.map((_,j)=>Math.min(1,count*matchProbabilities.slice(j).reduce((a,b)=>a+b,0)));
+  return {theorem:'hypergeometric matching and disjoint exact coverage',n,r,totalCombinations:total,uniqueTickets:count,
+    matchProbabilities,expectedTicketsByMatches:matchProbabilities.map(p=>count*p),
+    exactMainMatchProbability:count/total,atLeastUnionUpperBounds,
+    assumptions:'Main-number sets fixed before an independent uniform draw. Bonus balls and prize payouts are excluded.'};
 }
 function countWhere(n,predicate){let m=0;for(let x=1;x<=n;x++)if(predicate(x))m++;return m;}
 function digitsAllowed(x,maxDigit){
@@ -81,5 +99,5 @@ function quantumAudit(rows,n){
   return {version:'quantum-audit-1',enabledWeight:0,drawSums:sums,raw,moduloNumber:raw?1+((raw-1)%n):null};
 }
 
-window.PLATO_V35_SPACE={VERSION,choose,familyDefinitions,exactFamilyDistribution,createTargets,createState,scoreTicket,recordTicket,audit,quantumAudit};
+window.PLATO_V35_SPACE={VERSION,choose,coverageTheorem,familyDefinitions,exactFamilyDistribution,createTargets,createState,scoreTicket,recordTicket,audit,quantumAudit};
 })();
