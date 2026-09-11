@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-14-separated-copy';
+const VERSION='3.5-prize-coverage-15-scalable';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 const MODES={astra:'Astra baseline',experimental:'PLATO + Anti-overlap'};
 const MODE_DEFAULTS={
@@ -44,9 +44,11 @@ function compareNumbers(a,b){
  return a.length-b.length;
 }
 function ticketScore(cand,tickets,target,usage,pairs,triples,space,spaceState,weights,rankByNumber,layerByNumber,layer,profile,fullSize,details=false){
- let overlapPenalty=0,pairNovel=0,tripleNovel=0;
- for(const old of tickets){let overlap=0;for(const x of cand)if(old.includes(x))overlap++;overlapPenalty+=overlap*overlap;}
+ // Exact identity: sum of squared overlaps equals used singles plus twice used pairs.
+ // This keeps the same score without scanning every earlier ticket.
+ let overlapPenalty=cand.reduce((sum,x)=>sum+(usage[x]||0),0),pairNovel=0,tripleNovel=0;
  for(let i=0;i<cand.length;i++)for(let j=i+1;j<cand.length;j++){
+  overlapPenalty+=2*(pairs.get(pairKey(cand[i],cand[j]))||0);
   pairNovel+=1/(1+(pairs.get(pairKey(cand[i],cand[j]))||0));
   for(let m=j+1;m<cand.length;m++)tripleNovel+=1/(1+(triples.get(tripleKey(cand[i],cand[j],cand[m]))||0));
  }
@@ -82,6 +84,28 @@ function candidateBeam(pool,size,seen,evaluate,width){
  }
  return beam[0]?.numbers||null;
 }
+// Large portfolios use a bounded queue of combinations ordered by each layer's
+// number evidence. Every queued set receives the complete live selection score.
+function combinationCursor(pool,layer,size){
+ const allowed=new Set(pool.map(x=>x.number)),numbers=layer.out.filter(x=>allowed.has(x.number)).map(x=>x.number),indices=Array.from({length:size},(_,i)=>i);let done=numbers.length<size;
+ return {next(){
+  if(done)return null;const value=indices.map(i=>numbers[i]).sort((a,b)=>a-b);let i=size-1;
+  while(i>=0&&indices[i]===numbers.length-size+i)i--;
+  if(i<0)done=true;else{indices[i]++;for(let j=i+1;j<size;j++)indices[j]=indices[j-1]+1;}
+  return value;
+ }};
+}
+function refillFrontier(state,seen,amount){
+ let added=0;
+ while(added<amount){const candidate=state.cursor.next();if(!candidate)break;const key=candidate.join('-');if(seen.has(key)||state.pending.has(key))continue;state.pending.set(key,candidate);added++;}
+ return added;
+}
+function frontierBest(state,seen,evaluate){
+ for(const key of [...state.pending.keys()])if(seen.has(key))state.pending.delete(key);
+ refillFrontier(state,seen,1);let best=null,bestScore=-Infinity;
+ for(const candidate of state.pending.values()){const score=evaluate(candidate);if(score>bestScore+1e-12||(Math.abs(score-bestScore)<=1e-12&&compareNumbers(candidate,best)<0)){best=candidate;bestScore=score;}}
+ return best;
+}
 function validatePortfolio(game,count,tickets){
   const cfg=GAME_CFG[game];if(!cfg||tickets.length!==count)return {pass:false,reason:'ticket-count'};const seen=new Set();
   for(const ticket of tickets){
@@ -113,12 +137,15 @@ function portfolio(game,count,mode='experimental',options={}){
   };
   const profile=ranked.numericProfile||PLATO_V35.numericProfile(ranked.compatibleRows);
   const layers=(experimental?ranked.layers.filter(layer=>layer.id!=='ensemble'):ranked.layers.filter(layer=>layer.id==='ensemble'));
+  const frontiers=count>200?new Map(layers.map(layer=>{const state={cursor:combinationCursor(pool,layer,cfg.r),pending:new Map()};refillFrontier(state,seen,64);return [layer.id,state];})):null;
   for(let t=0;t<count;t++){
     let best=null,bestDetail=null;
     for(const layer of layers){
       const layerByNumber=new Map(layer.out.map(item=>[item.number,item]));
       const evaluate=(numbers,details=false)=>ticketScore(numbers,tickets,target,usage,pairs,triples,space,spaceState,weights,rankByNumber,layerByNumber,layer,profile,cfg.r,details);
-      let candidate=candidateBeam(pool,cfg.r,seen,evaluate,24);if(!candidate)candidate=candidateBeam(pool,cfg.r,seen,evaluate,128);if(!candidate)continue;
+      let candidate=frontiers?frontierBest(frontiers.get(layer.id),seen,evaluate):candidateBeam(pool,cfg.r,seen,evaluate,24);
+      if(!candidate&&!frontiers)candidate=candidateBeam(pool,cfg.r,seen,evaluate,128);
+      if(!candidate&&!frontiers)candidate=candidateBeam(pool,cfg.r,seen,evaluate,Math.min(4096,Math.max(256,count)));if(!candidate)continue;
       const detail=evaluate(candidate,true);
       if(!bestDetail||detail.score>bestDetail.score+1e-12||(Math.abs(detail.score-bestDetail.score)<=1e-12&&(compareNumbers(candidate,best)<0||(compareNumbers(candidate,best)===0&&layer.id<bestDetail.layer.id)))){best=candidate;bestDetail=detail;}
     }
@@ -133,7 +160,7 @@ function portfolio(game,count,mode='experimental',options={}){
   const layerUsage={};for(const detail of selectionDetails)layerUsage[detail.layer.label]=(layerUsage[detail.layer.label]||0)+1;
   const generationAudit={
     deterministic:true,blindRandom:false,quickPick:false,numericOnly:true,calendarScoring:false,
-    tieBreak:"Ascending numeric order for exactly equal scores",search:"Deterministic beam, width 24; width 128 only if exhausted",
+    tieBreak:"Ascending numeric order for exactly equal scores",search:count>200?"Evidence-ordered combination frontier, 64 fully scored candidates per layer":"Deterministic beam widths 24, 128, then ticket-count recovery up to 4096",
     policy:{rankingWeight:.50,allocationWeight:1.1,numericPatternWeight:1,numberDrootWeight:.10,...weights},
     layers:layers.map(layer=>({id:layer.id,label:layer.label})),selectedLayerCounts:layerUsage,crossSystemExactDuplicatesAllowed:false,crossSystemReferenceTickets:crossSystemReference.length,
     basis:['era-aware numeric ranking','individual and set DRoot','TSUM and Q','DRoot transitions','candidate-pool allocation','pair/triple coverage','overlap control',...(experimental?['count-based population proportions','possibility-space coverage']:[])],
@@ -177,24 +204,28 @@ function compare(game,count){
 }
 function powerballChoice(i,ranked){
  if(!Number.isInteger(i)||i<0)throw new Error('Invalid Powerball ticket index.');
+ return powerballChoices(i+1,ranked).at(-1);
+}
+function powerballChoices(count,ranked){
+ if(!Number.isSafeInteger(count)||count<1)throw new Error('Invalid Powerball ticket count.');
  const candidates=ranked.bonusRanking||PLATO_V35.bonusRanking(ranked.compatibleRows||[],GAME_CFG.pb.bonusN);
  if(!candidates.length)throw new Error('No compatible Powerball evidence. No bonus filler generated.');
- const usage={};let selected;
- for(let ticket=0;ticket<=i;ticket++){
-  selected=null;
+ const usage={},out=[];
+ for(let ticket=0;ticket<count;ticket++){
+  let selected=null;
   for(const item of candidates){
    const usedBefore=usage[item.number]||0,allocationScore=item.score/(1+usedBefore);
    if(!selected||allocationScore>selected.allocationScore||(allocationScore===selected.allocationScore&&item.number<selected.number))
     selected={...item,usedBefore,allocationScore};
   }
-  usage[selected.number]=(usage[selected.number]||0)+1;
+  usage[selected.number]=(usage[selected.number]||0)+1;out.push(selected);
  }
- return selected;
+ return out;
 }
 function powerballFor(i,ranked){return powerballChoice(i,ranked).number;}
-function formatTicket(game,ticket,i,ranked){
+function formatTicket(game,ticket,i,ranked,powerballNumber){
   const main=ticket.map(x=>String(x).padStart(2,'0')).join(' ');
-  return game==='pb'?`${main}   PB ${String(powerballFor(i,ranked)).padStart(2,'0')}`:main;
+  return game==='pb'?`${main}   PB ${String(powerballNumber??powerballFor(i,ranked)).padStart(2,'0')}`:main;
 }
 function selectionEvidence(decision){
   const evidence=document.createElement('details'),heading=document.createElement('summary'),body=document.createElement('span');
@@ -249,11 +280,12 @@ async function run(event){
       try{localStorage.setItem(STORE,JSON.stringify(payload))}catch(_){}window.PLATO_LAST_GENERATION=payload;return;
     }
     const res=portfolio(game,count,mode);if(!res.validation.pass)throw new Error(`Portfolio validation failed: ${res.validation.reason}`);
+    const bonusChoices=game==='pb'?powerballChoices(res.tickets.length,res.ranked):[];
     summary.textContent=`${GAME_CFG[game].name} · ${res.modeLabel} · ${res.tickets.length} tickets · ${res.pool.length} candidate numbers · layers: ${Object.entries(res.layerUsage).map(([name,value])=>`${name} ${value}`).join(', ')} · deterministic · PASS`;
     const patterns=PLATO_V35.analysePatterns(game,{rows:res.ranked.rows}),setDetails=res.tickets.map(ticket=>PLATO_V35.classifySet(ticket,patterns));
     const fragment=document.createDocumentFragment();
     res.tickets.forEach((ticket,i)=>{
-      const item=document.createElement('li'),details=setDetails[i];item.className='ticket';item.textContent=formatTicket(game,ticket,i,res.ranked);
+      const item=document.createElement('li'),details=setDetails[i];item.className='ticket';item.textContent=formatTicket(game,ticket,i,res.ranked,bonusChoices[i]?.number);
       const stats=document.createElement('span');stats.style.display='block';stats.style.fontSize='12px';stats.style.color='#b9c2ce';
       stats.textContent=`Main TSUM: ${details.tsum} · Set DRoot: ${details.setDigitalRoot}\nNumber DRoots: ${details.individualDigitalRoots.map(x=>`${x.number}→${x.droot}`).join(' ')}`;
       if(details.comparison)stats.textContent+=`\nQ: ${details.comparison.q_t} vs draw ${details.comparison.referenceDraw} · Q DRoot: ${details.comparison.qDigitalRoot}`;
@@ -261,18 +293,17 @@ async function run(event){
         const labels=Object.entries(details.behaviour).filter(([,value])=>value.status===status).map(([key])=>patterns.current.groups[key].label);
         if(labels.length)stats.textContent+=`\n${status[0].toUpperCase()+status.slice(1)}: ${labels.join(', ')}`;
       }
-      if(game==='pb'){const pb=powerballChoice(i,res.ranked);stats.textContent+=`\nPB numeric score: ${pb.score.toFixed(4)} · Allocation: ${pb.allocationScore.toFixed(4)} · DRoot ${pb.droot}`;}
+      if(game==='pb'){const pb=bonusChoices[i];stats.textContent+=`\nPB numeric score: ${pb.score.toFixed(4)} · Allocation: ${pb.allocationScore.toFixed(4)} · DRoot ${pb.droot}`;}
       const description=document.createElement('details'),descriptionTitle=document.createElement('summary');descriptionTitle.textContent='Show details';description.appendChild(descriptionTitle);description.appendChild(stats);
       const decision=res.selectionDetails[i];
       description.appendChild(selectionEvidence(decision));item.appendChild(description);fragment.appendChild(item);
     });
-    output.appendChild(fragment);showCopyText(res.tickets.map((ticket,i)=>formatTicket(game,ticket,i,res.ranked)).join('\n'));renderPatterns(patterns,res.coverageTheorem,res.possibility);
+    output.appendChild(fragment);showCopyText(res.tickets.map((ticket,i)=>formatTicket(game,ticket,i,res.ranked,bonusChoices[i]?.number)).join('\n'));renderPatterns(patterns,res.coverageTheorem,res.possibility);
     output.dataset.historyTotal=String(res.ranked.history.total);output.dataset.rawDraws=String(res.ranked.history.raw);output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);output.dataset.mode=res.mode;output.dataset.validation='PASS';output.dataset.pool=res.pool.join(',');output.dataset.deterministic='true';
     const payload={version:VERSION,createdAt:new Date().toISOString(),game,mode,count,pool:res.pool,tickets:res.tickets,setDetails,
       selectionDetails:res.selectionDetails,numberEvidence:res.ranked.out,numberWeights:res.ranked.weights,
-      bonusEvidence:game==='pb'?res.tickets.map((_,i)=>powerballChoice(i,res.ranked)):[],
-      powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,res.ranked)):[],history:res.ranked.history,possibility:res.possibility,generationAudit:res.generationAudit,coverageTheorem:res.coverageTheorem,validation:res.validation};
+      bonusEvidence:bonusChoices,powerballs:bonusChoices.map(x=>x.number),history:res.ranked.history,possibility:res.possibility,generationAudit:res.generationAudit,coverageTheorem:res.coverageTheorem,validation:res.validation};
     try{localStorage.setItem(STORE,JSON.stringify(payload))}catch(_){}
     window.PLATO_LAST_GENERATION={...payload,patterns};
   }catch(error){summary.textContent=String(error.message||error)}finally{btn.disabled=false;btn.textContent='Generate v3.5'}
@@ -289,5 +320,5 @@ function install(){
   function controls(){const cfg=GAME_CFG[select.value],isSystem=entry.value==='system';ticketField.hidden=isSystem;systemField.hidden=!isSystem;systemSize.min=cfg.r;systemSize.max=cfg.n;if(Number(systemSize.value)<cfg.r||Number(systemSize.value)>cfg.n)systemSize.value=Math.min(cfg.n,cfg.r+2);}
   select.value='sat';const method=document.getElementById('v35Method');if(method)method.value='astra';entry.addEventListener('change',controls);select.addEventListener('change',controls);document.getElementById('v35SelectAll').addEventListener('click',selectAllNumbers);document.getElementById('v35CopyAll').addEventListener('click',copyAllNumbers);controls();document.getElementById('v35Form').addEventListener('submit',run);document.getElementById('v35Generate').disabled=false;
 }
-window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,systemEntry,compare,coveragePoolK,modePool,validatePortfolio,powerballChoice,powerballFor,formatTicket,selectAllNumbers,copyAllNumbers,run};install();
+window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,systemEntry,compare,coveragePoolK,modePool,validatePortfolio,powerballChoice,powerballChoices,powerballFor,formatTicket,selectAllNumbers,copyAllNumbers,run};install();
 })();
