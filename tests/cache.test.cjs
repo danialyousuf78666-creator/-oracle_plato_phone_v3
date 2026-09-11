@@ -5,7 +5,7 @@ const fs=require('node:fs');
 function harness(){
  const handlers={},stores=new Map();let claimed=false,skipped=false;const root='https://example.com/plato/';
  const caches={keys:async()=>[...stores.keys()],delete:async k=>stores.delete(k),open:async k=>{if(!stores.has(k))stores.set(k,new Map());const s=stores.get(k);return {addAll:async reqs=>{for(const r of reqs)s.set(r.url,new Response('asset'))},keys:async()=>[...s.keys()].map(url=>({url})),match:async r=>s.get(typeof r==='string'?r:r.url),put:async(r,v)=>s.set(typeof r==='string'?r:r.url,v)}}};
- const context={URL,Request,Response,caches,fetch:async()=>new Response('<meta content="v35-root-20260911-12-layered-systems">'),self:{location:{href:root+'sw.js'},addEventListener:(n,fn)=>handlers[n]=fn,skipWaiting:async()=>{skipped=true},clients:{claim:async()=>{claimed=true}}}};
+ const context={URL,Request,Response,caches,fetch:async()=>new Response('<meta content="v35-root-20260911-13-separated-copy">'),self:{location:{href:root+'sw.js'},addEventListener:(n,fn)=>handlers[n]=fn,skipWaiting:async()=>{skipped=true},clients:{claim:async()=>{claimed=true}}}};
  vm.runInNewContext(fs.readFileSync('sw.js','utf8'),context);
  return {root,stores,caches,context,get claimed(){return claimed},get skipped(){return skipped},life:async n=>{let p;handlers[n]({waitUntil:v=>p=v});await p},request:async(path,mode='navigate')=>{let p;handlers.fetch({request:{url:new URL(path,root).href,method:'GET',mode},respondWith:v=>p=v});return p}};
 }

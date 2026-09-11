@@ -1,11 +1,11 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-13-layered-systems';
+const VERSION='3.5-prize-coverage-14-separated-copy';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 const MODES={astra:'Astra baseline',experimental:'PLATO + Anti-overlap'};
 const MODE_DEFAULTS={
   astra:{poolExtra:0,rankedShare:.30,layerWeight:0,possibilityWeight:0,pairNovelWeight:.26,tripleNovelWeight:.10,overlapPenaltyWeight:.12},
-  experimental:{poolExtra:8,rankedShare:.24,layerWeight:.55,possibilityWeight:.65,pairNovelWeight:.46,tripleNovelWeight:.22,overlapPenaltyWeight:.42}
+  experimental:{poolExtra:8,rankedShare:.24,layerWeight:1.10,possibilityWeight:.75,pairNovelWeight:.50,tripleNovelWeight:.24,overlapPenaltyWeight:.65}
 };
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const tripleKey=(a,b,c)=>[a,b,c].sort((x,y)=>x-y).join('-');
@@ -20,7 +20,13 @@ function coveragePoolK(game,count){
 function modePool(ranked,cfg,baseK,mode,options={}){
   const d=MODE_DEFAULTS[mode],extra=Number.isFinite(options.poolExtra)?Math.max(0,Math.floor(options.poolExtra)):d.poolExtra;
   const k=clamp(baseK+extra,cfg.r+4,cfg.n);
-  const pool=ranked.out.filter(item=>Number.isFinite(item.score)&&item.score>0).slice(0,k);
+  let ordered=ranked.out;
+  if(mode==='experimental'){
+    const specialists=ranked.layers.filter(layer=>layer.id!=='ensemble').map(layer=>new Map(layer.out.map(item=>[item.number,item.score])));
+    ordered=ranked.out.map(item=>{const values=specialists.map(map=>map.get(item.number)||0);return {...item,specialistPoolScore:Math.max(...values)+values.reduce((a,b)=>a+b,0)/values.length};})
+      .sort((a,b)=>b.specialistPoolScore-a.specialistPoolScore||b.score-a.score||a.number-b.number);
+  }
+  const pool=ordered.filter(item=>Number.isFinite(item.score)&&item.score>0).slice(0,k);
   if(pool.length<cfg.r)throw new Error("Not enough numbers with numeric evidence. No filler generated.");
   return {k:pool.length,pool};
 }
@@ -92,10 +98,11 @@ function portfolio(game,count,mode='experimental',options={}){
   const experimental=mode!=='astra',d=MODE_DEFAULTS[mode],cfg=GAME_CFG[game];
   if(count>PLATO_V35_SPACE.choose(cfg.n,cfg.r))throw new Error('Ticket count exceeds all unique number combinations.');
   const ranked=options.rankedResult||PLATO_V35.rank(game,options),baseK=coveragePoolK(game,count),picked=modePool(ranked,cfg,baseK,mode,options),k=picked.k,pool=picked.pool;
+  const crossSystemReference=experimental&&options.crossSystemReference!==false?portfolio(game,count,'astra',{...options,rankedResult:ranked,crossSystemReference:false}).tickets:[];
   const scores=pool.map(x=>x.score),z=scores.reduce((a,b)=>a+b,0),totalSlots=count*cfg.r,target={},usage={};
   const rankedMix=clamp(options.rankedShare==null?d.rankedShare:Number(options.rankedShare),0,1);
   pool.forEach((item,i)=>{const uniform=1/pool.length,rankedShare=scores[i]/z;target[item.number]=totalSlots*((1-rankedMix)*uniform+rankedMix*rankedShare);usage[item.number]=0});
-  const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[],selectionDetails=[],rankByNumber=new Map(pool.map(x=>[x.number,x]));
+  const pairs=new Map(),triples=new Map(),seen=new Set(crossSystemReference.map(ticket=>ticket.join('-'))),tickets=[],selectionDetails=[],rankByNumber=new Map(pool.map(x=>[x.number,x]));
   const space=experimental&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.createTargets(cfg,count):null,spaceState=space?PLATO_V35_SPACE.createState(space):null;
   const weights={
     layerWeight:experimental?(Number.isFinite(options.layerWeight)?options.layerWeight:d.layerWeight):0,
@@ -105,7 +112,7 @@ function portfolio(game,count,mode='experimental',options={}){
     possibilityWeight:experimental?(Number.isFinite(options.possibilityWeight)?options.possibilityWeight:d.possibilityWeight):0
   };
   const profile=ranked.numericProfile||PLATO_V35.numericProfile(ranked.compatibleRows);
-  const layers=(experimental?ranked.layers:ranked.layers.filter(layer=>layer.id==='ensemble'));
+  const layers=(experimental?ranked.layers.filter(layer=>layer.id!=='ensemble'):ranked.layers.filter(layer=>layer.id==='ensemble'));
   for(let t=0;t<count;t++){
     let best=null,bestDetail=null;
     for(const layer of layers){
@@ -128,7 +135,7 @@ function portfolio(game,count,mode='experimental',options={}){
     deterministic:true,blindRandom:false,quickPick:false,numericOnly:true,calendarScoring:false,
     tieBreak:"Ascending numeric order for exactly equal scores",search:"Deterministic beam, width 24; width 128 only if exhausted",
     policy:{rankingWeight:.50,allocationWeight:1.1,numericPatternWeight:1,numberDrootWeight:.10,...weights},
-    layers:layers.map(layer=>({id:layer.id,label:layer.label})),selectedLayerCounts:layerUsage,
+    layers:layers.map(layer=>({id:layer.id,label:layer.label})),selectedLayerCounts:layerUsage,crossSystemExactDuplicatesAllowed:false,crossSystemReferenceTickets:crossSystemReference.length,
     basis:['era-aware numeric ranking','individual and set DRoot','TSUM and Q','DRoot transitions','candidate-pool allocation','pair/triple coverage','overlap control',...(experimental?['count-based population proportions','possibility-space coverage']:[])],
     historyDraws:ranked.history.total,currentEraDraws:ranked.history.raw,candidatePool:k
   };
@@ -150,18 +157,19 @@ function systemSetScore(numbers,rankByNumber,layerByNumber,layer,cfg,details=fal
 function systemEntry(game,size,mode='experimental',options={}){
   if(!GAME_CFG[game]||!MODES[mode])throw new Error('Choose a supported game and method.');
   const cfg=GAME_CFG[game];if(!Number.isSafeInteger(size)||size<cfg.r||size>cfg.n)throw new Error(`Choose ${cfg.r}–${cfg.n} system numbers.`);
-  const ranked=options.rankedResult||PLATO_V35.rank(game,options),pool=ranked.out.filter(item=>Number.isFinite(item.score)&&item.score>0);
+  const ranked=options.rankedResult||PLATO_V35.rank(game,options),experimental=mode==='experimental',pool=ranked.out.filter(item=>Number.isFinite(item.score)&&item.score>0);
   if(pool.length<size)throw new Error('Not enough numbers with numeric evidence. No filler generated.');
-  const layers=mode==='astra'?ranked.layers.filter(layer=>layer.id==='ensemble'):ranked.layers,rankByNumber=new Map(ranked.out.map(item=>[item.number,item]));let best=null,bestDetail=null;
+  const layers=experimental?ranked.layers.filter(layer=>layer.id!=='ensemble'):ranked.layers.filter(layer=>layer.id==='ensemble'),rankByNumber=new Map(ranked.out.map(item=>[item.number,item]));
+  const reference=experimental&&options.crossSystemReference!==false?systemEntry(game,size,'astra',{...options,rankedResult:ranked,crossSystemReference:false}).numbers:null,blocked=new Set(reference?[reference.join('-')]:[]);let best=null,bestDetail=null;
   for(const layer of layers){
     const layerByNumber=new Map(layer.out.map(item=>[item.number,item])),evaluate=(numbers,details=false)=>systemSetScore(numbers,rankByNumber,layerByNumber,layer,cfg,details);
-    const candidate=candidateBeam(pool,size,new Set(),evaluate,32);if(!candidate)continue;const detail=evaluate(candidate,true);
+    const candidate=candidateBeam(pool,size,blocked,evaluate,32);if(!candidate)continue;const detail=evaluate(candidate,true);
     if(!bestDetail||detail.score>bestDetail.score+1e-12||(Math.abs(detail.score-bestDetail.score)<=1e-12&&(compareNumbers(candidate,best)<0||(compareNumbers(candidate,best)===0&&layer.id<bestDetail.layer.id)))){best=candidate;bestDetail=detail;}
   }
   if(!best)throw new Error('Numeric system search produced no supported entry.');
   const summary=PLATO_V35_SPACE.systemSummary(cfg,best,ranked.numericProfile.previous?.tsum),powerball=game==='pb'?powerballChoice(0,ranked):null;
   return {entryType:'system',game,mode,modeLabel:MODES[mode],cfg,ranked,numbers:best,size,summary,powerball,selectionDetail:bestDetail,
-    generationAudit:{deterministic:true,blindRandom:false,quickPick:false,numericOnly:true,calendarScoring:false,layers:layers.map(x=>({id:x.id,label:x.label})),selectedLayer:bestDetail.layer,tieBreak:'Ascending numeric order for exactly equal scores'}};
+    generationAudit:{deterministic:true,blindRandom:false,quickPick:false,numericOnly:true,calendarScoring:false,layers:layers.map(x=>({id:x.id,label:x.label})),selectedLayer:bestDetail.layer,crossSystemExactDuplicatesAllowed:false,tieBreak:'Ascending numeric order for exactly equal scores'}};
 }
 function compare(game,count){
   const astra=portfolio(game,count,'astra'),experimental=portfolio(game,count,'experimental');
@@ -201,8 +209,9 @@ function selectionEvidence(decision){
 }
 function renderPatterns(analysis,theorem,possibility){
   let panel=document.getElementById('v35Patterns');
-  if(!panel){panel=document.createElement('section');panel.id='v35Patterns';document.getElementById('v35Tickets').after(panel)}
+  if(!panel){panel=document.createElement('details');panel.id='v35Patterns';document.getElementById('v35CopyTools').after(panel)}
   panel.replaceChildren();panel.hidden=false;
+  const toggle=document.createElement('summary');toggle.textContent='Show pattern descriptions';panel.appendChild(toggle);
   const title=document.createElement('h2');title.textContent='Common and uncommon patterns';panel.appendChild(title);
   const note=document.createElement('p');note.className='note';
   note.textContent=`${analysis.totalDraws} stored draws analysed. Counts use the ${analysis.current.drawCount} draws under current rules. These are descriptive historical patterns only; they do not claim predictive power.`;panel.appendChild(note);
@@ -223,7 +232,7 @@ function renderPatterns(analysis,theorem,possibility){
 async function run(event){
   if(event)event.preventDefault();const form=document.getElementById('v35Form');if(!form.reportValidity())return;
   const game=document.getElementById('v35Game').value,mode=document.getElementById('v35Method').value,entryType=document.getElementById('v35EntryType').value,count=Number(document.getElementById('v35Count').value),btn=document.getElementById('v35Generate'),summary=document.getElementById('v35Summary'),output=document.getElementById('v35Tickets');
-  if(btn.disabled)return;btn.disabled=true;btn.textContent='Generating…';summary.textContent='';output.replaceChildren();
+  if(btn.disabled)return;btn.disabled=true;btn.textContent='Generating…';summary.textContent='';output.replaceChildren();document.getElementById('v35CopyTools').hidden=true;document.getElementById('v35CopyText').value='';
   const oldPatterns=document.getElementById('v35Patterns');if(oldPatterns)oldPatterns.hidden=true;
   await new Promise(resolve=>setTimeout(resolve,0));
   try{
@@ -233,7 +242,8 @@ async function run(event){
       const stats=document.createElement('span');stats.style.display='block';stats.style.fontSize='12px';stats.style.color='#b9c2ce';
       stats.textContent=`${res.summary.lineCount.toLocaleString()} exact ${res.cfg.r}-number standard combinations\nMean line TSUM: ${res.summary.meanLineTSUM.toFixed(2)} · Range: ${res.summary.minLineTSUM}–${res.summary.maxLineTSUM}\nExact main-set coverage: ${(100*res.summary.exactMainMatchProbability).toPrecision(4)}% · Layer: ${res.selectionDetail.layer.label}`;
       if(res.powerball)stats.textContent+=`\nPB numeric score: ${res.powerball.score.toFixed(4)} · DRoot ${res.powerball.droot}`;
-      item.appendChild(stats);item.appendChild(selectionEvidence(res.selectionDetail));output.appendChild(item);
+      const description=document.createElement('details'),descriptionTitle=document.createElement('summary');descriptionTitle.textContent='Show details';description.appendChild(descriptionTitle);description.appendChild(stats);description.appendChild(selectionEvidence(res.selectionDetail));item.appendChild(description);output.appendChild(item);
+      showCopyText(numbers+(res.powerball?`   PB ${String(res.powerball.number).padStart(2,'0')}`:''));
       summary.textContent=`${res.cfg.name} · ${res.modeLabel} · System ${res.size} · ${res.summary.lineCount.toLocaleString()} covered lines · deterministic numeric selection`;
       const payload={version:VERSION,createdAt:new Date().toISOString(),entryType:'system',game,mode,numbers:res.numbers,systemSummary:res.summary,powerball:res.powerball,selectionDetail:res.selectionDetail,generationAudit:res.generationAudit};
       try{localStorage.setItem(STORE,JSON.stringify(payload))}catch(_){}window.PLATO_LAST_GENERATION=payload;return;
@@ -252,11 +262,11 @@ async function run(event){
         if(labels.length)stats.textContent+=`\n${status[0].toUpperCase()+status.slice(1)}: ${labels.join(', ')}`;
       }
       if(game==='pb'){const pb=powerballChoice(i,res.ranked);stats.textContent+=`\nPB numeric score: ${pb.score.toFixed(4)} · Allocation: ${pb.allocationScore.toFixed(4)} · DRoot ${pb.droot}`;}
-      item.appendChild(stats);
+      const description=document.createElement('details'),descriptionTitle=document.createElement('summary');descriptionTitle.textContent='Show details';description.appendChild(descriptionTitle);description.appendChild(stats);
       const decision=res.selectionDetails[i];
-      item.appendChild(selectionEvidence(decision));fragment.appendChild(item);
+      description.appendChild(selectionEvidence(decision));item.appendChild(description);fragment.appendChild(item);
     });
-    output.appendChild(fragment);renderPatterns(patterns,res.coverageTheorem,res.possibility);
+    output.appendChild(fragment);showCopyText(res.tickets.map((ticket,i)=>formatTicket(game,ticket,i,res.ranked)).join('\n'));renderPatterns(patterns,res.coverageTheorem,res.possibility);
     output.dataset.historyTotal=String(res.ranked.history.total);output.dataset.rawDraws=String(res.ranked.history.raw);output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);output.dataset.mode=res.mode;output.dataset.validation='PASS';output.dataset.pool=res.pool.join(',');output.dataset.deterministic='true';
     const payload={version:VERSION,createdAt:new Date().toISOString(),game,mode,count,pool:res.pool,tickets:res.tickets,setDetails,
@@ -267,11 +277,17 @@ async function run(event){
     window.PLATO_LAST_GENERATION={...payload,patterns};
   }catch(error){summary.textContent=String(error.message||error)}finally{btn.disabled=false;btn.textContent='Generate v3.5'}
 }
+function showCopyText(value){const box=document.getElementById('v35CopyText'),tools=document.getElementById('v35CopyTools');box.value=value;tools.hidden=false;}
+function selectAllNumbers(){const box=document.getElementById('v35CopyText');box.focus();box.select();box.setSelectionRange(0,box.value.length);document.getElementById('v35CopyStatus').textContent='All numbers selected.';}
+async function copyAllNumbers(){
+  const box=document.getElementById('v35CopyText'),status=document.getElementById('v35CopyStatus');selectAllNumbers();
+  try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(box.value);else if(!document.execCommand('copy'))throw new Error('copy unavailable');status.textContent='All numbers copied.';}catch(_){status.textContent='Numbers selected. Choose Copy from the phone menu.';}
+}
 function install(){
   const select=document.getElementById('v35Game');for(const [key,cfg] of Object.entries(GAME_CFG)){const option=document.createElement('option');option.value=key;option.textContent=cfg.name;select.appendChild(option)}
   const entry=document.getElementById('v35EntryType'),ticketField=document.getElementById('v35TicketField'),systemField=document.getElementById('v35SystemField'),systemSize=document.getElementById('v35SystemSize');
   function controls(){const cfg=GAME_CFG[select.value],isSystem=entry.value==='system';ticketField.hidden=isSystem;systemField.hidden=!isSystem;systemSize.min=cfg.r;systemSize.max=cfg.n;if(Number(systemSize.value)<cfg.r||Number(systemSize.value)>cfg.n)systemSize.value=Math.min(cfg.n,cfg.r+2);}
-  select.value='sat';const method=document.getElementById('v35Method');if(method)method.value='astra';entry.addEventListener('change',controls);select.addEventListener('change',controls);controls();document.getElementById('v35Form').addEventListener('submit',run);document.getElementById('v35Generate').disabled=false;
+  select.value='sat';const method=document.getElementById('v35Method');if(method)method.value='astra';entry.addEventListener('change',controls);select.addEventListener('change',controls);document.getElementById('v35SelectAll').addEventListener('click',selectAllNumbers);document.getElementById('v35CopyAll').addEventListener('click',copyAllNumbers);controls();document.getElementById('v35Form').addEventListener('submit',run);document.getElementById('v35Generate').disabled=false;
 }
-window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,systemEntry,compare,coveragePoolK,modePool,validatePortfolio,powerballChoice,powerballFor,formatTicket,run};install();
+window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,systemEntry,compare,coveragePoolK,modePool,validatePortfolio,powerballChoice,powerballFor,formatTicket,selectAllNumbers,copyAllNumbers,run};install();
 })();

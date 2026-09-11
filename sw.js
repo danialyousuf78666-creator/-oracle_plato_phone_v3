@@ -1,4 +1,4 @@
-const BUILD='v35-root-20260911-12-layered-systems';
+const BUILD='v35-root-20260911-13-separated-copy';
 const ROOT=new URL('./',self.location.href);
 const CACHE=`plato-root:${ROOT.pathname}:${BUILD}`;
 const SHELL=new URL('index.html',ROOT).href;
