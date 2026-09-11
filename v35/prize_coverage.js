@@ -1,11 +1,11 @@
 (function(){
 'use strict';
-const VERSION='3.5-prize-coverage-11-two-systems';
+const VERSION='3.5-prize-coverage-12-numeric-only';
 const STORE='ORACLE_PLATO_V35_PRIZE_COVERAGE_V1';
 const MODES={astra:'Astra baseline',experimental:'PLATO + Anti-overlap'};
 const MODE_DEFAULTS={
-  astra:{poolExtra:0,rankedShare:.30,possibilityWeight:0,pairNovelWeight:.26,tripleNovelWeight:.10,overlapPenaltyWeight:.12,phaseStep:3},
-  experimental:{poolExtra:8,rankedShare:.24,possibilityWeight:.65,pairNovelWeight:.46,tripleNovelWeight:.22,overlapPenaltyWeight:.42,phaseStep:7}
+  astra:{poolExtra:0,rankedShare:.30,possibilityWeight:0,pairNovelWeight:.26,tripleNovelWeight:.10,overlapPenaltyWeight:.12},
+  experimental:{poolExtra:8,rankedShare:.24,possibilityWeight:.65,pairNovelWeight:.46,tripleNovelWeight:.22,overlapPenaltyWeight:.42}
 };
 const pairKey=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const tripleKey=(a,b,c)=>[a,b,c].sort((x,y)=>x-y).join('-');
@@ -19,7 +19,9 @@ function coveragePoolK(game,count){
 function modePool(ranked,cfg,baseK,mode,options={}){
   const d=MODE_DEFAULTS[mode],extra=Number.isFinite(options.poolExtra)?Math.max(0,Math.floor(options.poolExtra)):d.poolExtra;
   const k=clamp(baseK+extra,cfg.r+4,Math.min(cfg.n,28));
-  return {k,pool:ranked.out.slice(0,k)};
+  const pool=ranked.out.filter(item=>Number.isFinite(item.score)&&item.score>0).slice(0,k);
+  if(pool.length<cfg.r)throw new Error("Not enough numbers with numeric evidence. No filler generated.");
+  return {k:pool.length,pool};
 }
 function updateCounts(ticket,pairs,triples,usage){
   ticket.forEach(x=>usage[x]=(usage[x]||0)+1);
@@ -28,42 +30,49 @@ function updateCounts(ticket,pairs,triples,usage){
     for(let k=j+1;k<ticket.length;k++){const tk=tripleKey(ticket[i],ticket[j],ticket[k]);triples.set(tk,(triples.get(tk)||0)+1)}
   }
 }
-function cyclicBias(index,length,phase){
-  if(!length)return 0;
-  const p=((index-phase)%length+length)%length;
-  return 1-p/length;
+// Bounded, deterministic numeric search. Equal scores use ascending numbers.
+// Every candidate is scored by the same formula; no seeds, rotation or jitter.
+function compareNumbers(a,b){
+ for(let i=0;i<Math.min(a.length,b.length);i++)if(a[i]!==b[i])return a[i]-b[i];
+ return a.length-b.length;
 }
-function candidateTicket(pool,cfg,target,usage,pairs,triples,phase,phaseStep){
-  const chosen=[];
-  while(chosen.length<cfg.r){
-    let best=null,bestScore=-1e99,bestIndex=Infinity;
-    for(let i=0;i<pool.length;i++){
-      const item=pool[i],x=item.number;if(chosen.includes(x))continue;
-      const deficit=(target[x]||0)-(usage[x]||0);let pairPenalty=0,triplePenalty=0;
-      for(let a=0;a<chosen.length;a++)pairPenalty+=pairs.get(pairKey(x,chosen[a]))||0;
-      for(let a=0;a<chosen.length;a++)for(let b=a+1;b<chosen.length;b++)triplePenalty+=triples.get(tripleKey(x,chosen[a],chosen[b]))||0;
-      const rankBonus=(pool.length-i)/pool.length;
-      const phaseBias=cyclicBias(i,pool.length,phase+chosen.length*phaseStep);
-      const score=1.20*deficit+0.18*rankBonus-0.34*pairPenalty-0.16*triplePenalty+0.055*phaseBias;
-      if(score>bestScore+1e-12||(Math.abs(score-bestScore)<=1e-12&&(i<bestIndex||(i===bestIndex&&x<best)))){bestScore=score;best=x;bestIndex=i}
-    }
-    if(best==null)break;chosen.push(best);
-  }
-  return chosen.sort((a,b)=>a-b);
+function ticketScore(cand,tickets,target,usage,pairs,triples,space,spaceState,weights,rankByNumber,profile,fullSize,details=false){
+ let overlapPenalty=0,pairNovel=0,tripleNovel=0;
+ for(const old of tickets){let overlap=0;for(const x of cand)if(old.includes(x))overlap++;overlapPenalty+=overlap*overlap;}
+ for(let i=0;i<cand.length;i++)for(let j=i+1;j<cand.length;j++){
+  pairNovel+=1/(1+(pairs.get(pairKey(cand[i],cand[j]))||0));
+  for(let m=j+1;m<cand.length;m++)tripleNovel+=1/(1+(triples.get(tripleKey(cand[i],cand[j],cand[m]))||0));
+ }
+ const deficit=cand.reduce((sum,x)=>sum+target[x]-(usage[x]||0),0);
+ const ranking=cand.reduce((sum,x)=>sum+rankByNumber.get(x).score,0);
+ const complete=cand.length===fullSize;
+ const patternEvidence=complete?PLATO_V35.numericSetEvidence(cand,profile):null;
+ const possibilityScore=complete&&space?PLATO_V35_SPACE.scoreTicket(cand,space,spaceState):0;
+ const components={ranking:.50*ranking,allocation:1.1*deficit,
+  pairCoverage:weights.pairNovelWeight*pairNovel,tripleCoverage:weights.tripleNovelWeight*tripleNovel,
+  overlap:-weights.overlapPenaltyWeight*overlapPenalty,
+  numericPatterns:patternEvidence?patternEvidence.score:0,possibility:weights.possibilityWeight*possibilityScore};
+ const value=Object.values(components).reduce((sum,x)=>sum+x,0);
+ return details?{score:value,components,patternEvidence,
+  numbers:cand.map(number=>({...rankByNumber.get(number),target:target[number],usedBefore:usage[number]||0}))}:value;
 }
-function ticketDiversityValue(cand,tickets,target,usage,pairs,triples,space,spaceState,weights,phase,poolIndex,poolLength){
-  let overlapPenalty=0;
-  for(const old of tickets){let ov=0;for(const x of cand)if(old.includes(x))ov++;overlapPenalty+=ov*ov}
-  let pairNovel=0,tripleNovel=0;
-  for(let i=0;i<cand.length;i++)for(let j=i+1;j<cand.length;j++){
-    pairNovel+=1/(1+(pairs.get(pairKey(cand[i],cand[j]))||0));
-    for(let m=j+1;m<cand.length;m++)tripleNovel+=1/(1+(triples.get(tripleKey(cand[i],cand[j],cand[m]))||0));
+function candidateBeam(pool,size,seen,evaluate,width){
+ const ordered=pool.map(item=>item.number).sort((a,b)=>a-b);
+ let beam=[{numbers:[],score:0}];
+ for(let depth=0;depth<size;depth++){
+  const candidates=new Map();
+  for(const entry of beam)for(const number of ordered){
+   if(entry.numbers.includes(number))continue;
+   const numbers=[...entry.numbers,number].sort((a,b)=>a-b),key=numbers.join('-');
+   if(candidates.has(key)||(depth===size-1&&seen.has(key)))continue;
+   const score=evaluate(numbers);
+   if(!Number.isFinite(score))throw new Error('Invalid numeric selection score.');
+   candidates.set(key,{numbers,score});
   }
-  const deficit=cand.reduce((s,x)=>s+(target[x]-(usage[x]||0)),0);
-  const possibilityScore=space?PLATO_V35_SPACE.scoreTicket(cand,space,spaceState):0;
-  const phaseCoverage=cand.reduce((s,x)=>s+cyclicBias(poolIndex.get(x)||0,poolLength,phase),0)/cand.length;
-  return 1.1*deficit+weights.pairNovelWeight*pairNovel+weights.tripleNovelWeight*tripleNovel-
-    weights.overlapPenaltyWeight*overlapPenalty+weights.possibilityWeight*possibilityScore+0.035*phaseCoverage;
+  beam=[...candidates.values()].sort((a,b)=>b.score-a.score||compareNumbers(a.numbers,b.numbers)).slice(0,width);
+  if(!beam.length)return null;
+ }
+ return beam[0]?.numbers||null;
 }
 function validatePortfolio(game,count,tickets){
   const cfg=GAME_CFG[game];if(!cfg||tickets.length!==count)return {pass:false,reason:'ticket-count'};const seen=new Set();
@@ -80,10 +89,10 @@ function portfolio(game,count,mode='experimental',options={}){
   if(!window.PLATO_V35||!PLATO_V35.rank)throw new Error('v3.5 engine is not ready. Reload once.');
   const experimental=mode!=='astra',d=MODE_DEFAULTS[mode],cfg=GAME_CFG[game];
   const ranked=options.rankedResult||PLATO_V35.rank(game,options),baseK=coveragePoolK(game,count),picked=modePool(ranked,cfg,baseK,mode,options),k=picked.k,pool=picked.pool;
-  const scores=pool.map(x=>Math.max(.001,x.score||.001)),z=scores.reduce((a,b)=>a+b,0)||1,totalSlots=count*cfg.r,target={},usage={};
+  const scores=pool.map(x=>x.score),z=scores.reduce((a,b)=>a+b,0),totalSlots=count*cfg.r,target={},usage={};
   const rankedMix=clamp(options.rankedShare==null?d.rankedShare:Number(options.rankedShare),0,1);
   pool.forEach((item,i)=>{const uniform=1/pool.length,rankedShare=scores[i]/z;target[item.number]=totalSlots*((1-rankedMix)*uniform+rankedMix*rankedShare);usage[item.number]=0});
-  const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[],poolIndex=new Map(pool.map((x,i)=>[x.number,i]));
+  const pairs=new Map(),triples=new Map(),seen=new Set(),tickets=[],selectionDetails=[],rankByNumber=new Map(pool.map(x=>[x.number,x]));
   const space=experimental&&window.PLATO_V35_SPACE?PLATO_V35_SPACE.createTargets(cfg,count):null,spaceState=space?PLATO_V35_SPACE.createState(space):null;
   const weights={
     pairNovelWeight:Number.isFinite(options.pairNovelWeight)?options.pairNovelWeight:d.pairNovelWeight,
@@ -91,49 +100,51 @@ function portfolio(game,count,mode='experimental',options={}){
     overlapPenaltyWeight:Number.isFinite(options.overlapPenaltyWeight)?options.overlapPenaltyWeight:d.overlapPenaltyWeight,
     possibilityWeight:experimental?(Number.isFinite(options.possibilityWeight)?options.possibilityWeight:d.possibilityWeight):0
   };
-  const phaseStep=Number.isFinite(options.phaseStep)?Math.max(1,Math.floor(options.phaseStep)):d.phaseStep;
-  const attemptsPerTicket=Math.max(30,Math.min(84,k*3));
-  const historyPhase=(ranked.rows.length+ranked.history.raw+ranked.history.structural)%Math.max(1,k);
+  const profile=ranked.numericProfile||PLATO_V35.numericProfile(ranked.compatibleRows);
   for(let t=0;t<count;t++){
-    let best=null,bestValue=-1e99,bestKey='';
-    for(let a=0;a<attemptsPerTicket;a++){
-      const phase=(historyPhase+t*phaseStep+a)%k;
-      const cand=candidateTicket(pool,cfg,target,usage,pairs,triples,phase,phaseStep);if(cand.length!==cfg.r)continue;
-      const key=cand.join('-');if(seen.has(key))continue;
-      const value=ticketDiversityValue(cand,tickets,target,usage,pairs,triples,space,spaceState,weights,phase,poolIndex,k);
-      if(value>bestValue+1e-12||(Math.abs(value-bestValue)<=1e-12&&(!bestKey||key<bestKey))){bestValue=value;best=cand;bestKey=key}
-    }
-    if(!best){
-      const ordered=pool.map(x=>x.number);
-      for(let shift=0;shift<ordered.length&&!best;shift++){
-        const cand=[];const stride=1+((phaseStep+t)%Math.max(1,ordered.length-1));
-        for(let j=0;j<cfg.r;j++)cand.push(ordered[(historyPhase+t+shift+j*stride)%ordered.length]);
-        const uniq=[...new Set(cand)].sort((a,b)=>a-b);if(uniq.length===cfg.r&&!seen.has(uniq.join('-')))best=uniq;
-      }
-    }
-    if(!best)break;seen.add(best.join('-'));tickets.push(best);updateCounts(best,pairs,triples,usage);if(space)PLATO_V35_SPACE.recordTicket(best,space,spaceState);
+    const evaluate=(numbers,details=false)=>ticketScore(numbers,tickets,target,usage,pairs,triples,space,spaceState,weights,rankByNumber,profile,cfg.r,details);
+    let best=candidateBeam(pool,cfg.r,seen,evaluate,24);
+    if(!best)best=candidateBeam(pool,cfg.r,seen,evaluate,128);
+    if(!best)throw new Error('Numeric search found no further unique set. No filler generated.');
+    selectionDetails.push(evaluate(best,true));
+    seen.add(best.join('-'));tickets.push(best);updateCounts(best,pairs,triples,usage);
+    if(space)PLATO_V35_SPACE.recordTicket(best,space,spaceState);
   }
   const possibility=space?PLATO_V35_SPACE.audit(space,spaceState):null;
   const validation=validatePortfolio(game,count,tickets);
   const coverageTheorem=validation.pass&&window.PLATO_V35_SPACE?{...PLATO_V35_SPACE.coverageTheorem(cfg,tickets),uniquePairs:pairs.size,uniqueTriples:triples.size}:null;
   const generationAudit={
-    deterministic:true,blindRandom:false,
-    basis:['era-aware v3.5 ranking','candidate-pool allocation','pair/triple coverage','overlap control',...(experimental?['possibility-space coverage']:[])],
+    deterministic:true,blindRandom:false,numericOnly:true,calendarScoring:false,
+    tieBreak:"Ascending numeric order for exactly equal scores",search:"Deterministic beam, width 24; width 128 only if exhausted",
+    policy:{rankingWeight:.50,allocationWeight:1.1,numericPatternWeight:1,numberDrootWeight:.10,...weights},
+    basis:['era-aware numeric ranking','individual and set DRoot','TSUM and Q','DRoot transitions','candidate-pool allocation','pair/triple coverage','overlap control',...(experimental?['possibility-space coverage']:[])],
     historyDraws:ranked.history.total,currentEraDraws:ranked.history.raw,candidatePool:k
   };
   return {mode,modeLabel:MODES[mode],cfg,ranked,k,baseK,pool:pool.map(x=>x.number),tickets,usage,pairs,triples,possibility,
-    quantumAudit:null,randomnessAudit:null,validation,generationAudit,coverageTheorem,
-    options:{poolExtra:k-baseK,rankedShare:rankedMix,phaseStep,...weights}};
+    quantumAudit:null,randomnessAudit:null,validation,generationAudit,coverageTheorem,selectionDetails,
+    options:{poolExtra:k-baseK,rankedShare:rankedMix,...weights}};
 }
 function compare(game,count){
   const astra=portfolio(game,count,'astra'),experimental=portfolio(game,count,'experimental');
   return {game,count,astra,experimental,pass:astra.validation.pass&&experimental.validation.pass};
 }
-function powerballFor(i,ranked){
-  const top=ranked?.out?.[0]?.number||1,raw=ranked?.history?.raw||0,total=ranked?.history?.total||0;
-  const offset=(top+raw+total)%20;
-  return 1+((offset+i)%20);
+function powerballChoice(i,ranked){
+ if(!Number.isInteger(i)||i<0)throw new Error('Invalid Powerball ticket index.');
+ const candidates=ranked.bonusRanking||PLATO_V35.bonusRanking(ranked.compatibleRows||[],GAME_CFG.pb.bonusN);
+ if(!candidates.length)throw new Error('No compatible Powerball evidence. No bonus filler generated.');
+ const usage={};let selected;
+ for(let ticket=0;ticket<=i;ticket++){
+  selected=null;
+  for(const item of candidates){
+   const usedBefore=usage[item.number]||0,allocationScore=item.score/(1+usedBefore);
+   if(!selected||allocationScore>selected.allocationScore||(allocationScore===selected.allocationScore&&item.number<selected.number))
+    selected={...item,usedBefore,allocationScore};
+  }
+  usage[selected.number]=(usage[selected.number]||0)+1;
+ }
+ return selected;
 }
+function powerballFor(i,ranked){return powerballChoice(i,ranked).number;}
 function formatTicket(game,ticket,i,ranked){
   const main=ticket.map(x=>String(x).padStart(2,'0')).join(' ');
   return game==='pb'?`${main}   PB ${String(powerballFor(i,ranked)).padStart(2,'0')}`:main;
@@ -175,13 +186,25 @@ async function run(event){
         const labels=Object.entries(details.behaviour).filter(([,value])=>value.status===status).map(([key])=>patterns.current.groups[key].label);
         if(labels.length)stats.textContent+=`\n${status[0].toUpperCase()+status.slice(1)}: ${labels.join(', ')}`;
       }
-      if(game==='pb')stats.textContent+=`\nPB: deterministic coverage · DRoot ${PLATO_V35.digitalRoot(powerballFor(i,res.ranked))}`;
-      item.appendChild(stats);fragment.appendChild(item);
+      if(game==='pb'){const pb=powerballChoice(i,res.ranked);stats.textContent+=`\nPB numeric score: ${pb.score.toFixed(4)} · Allocation: ${pb.allocationScore.toFixed(4)} · DRoot ${pb.droot}`;}
+      item.appendChild(stats);
+      const evidence=document.createElement('details'),heading=document.createElement('summary'),body=document.createElement('span');
+      heading.textContent='Number selection scores';body.style.display='block';body.style.fontSize='12px';
+      const decision=res.selectionDetails[i];
+      body.textContent=decision.numbers.map(x=>{
+        const strongest=[...x.contributions].sort((a,b)=>b.contribution-a.contribution).slice(0,3);
+        return x.number+' → '+x.score.toFixed(4)+' | '+strongest.map(term=>term.method.replace(/^m[12]_\d+_/,'').replaceAll('_',' ')+': '+term.contribution.toFixed(4)).join(', ');
+      }).join('\n');
+      body.textContent+='\nSet pattern support: '+decision.patternEvidence.terms.map(term=>term.pattern+' '+term.value+' → '+term.count+'/'+term.maximum).join(' · ');
+      body.textContent+='\nSelection score: '+decision.score.toFixed(4)+' | '+Object.entries(decision.components).map(([key,value])=>key+': '+value.toFixed(4)).join(', ');
+      evidence.appendChild(heading);evidence.appendChild(body);item.appendChild(evidence);fragment.appendChild(item);
     });
     output.appendChild(fragment);renderPatterns(patterns,res.coverageTheorem);
     output.dataset.historyTotal=String(res.ranked.history.total);output.dataset.rawDraws=String(res.ranked.history.raw);output.dataset.structuralDraws=String(res.ranked.history.structural);
     output.dataset.eras=JSON.stringify(res.ranked.history.eras);output.dataset.mode=res.mode;output.dataset.validation='PASS';output.dataset.pool=res.pool.join(',');output.dataset.deterministic='true';
     const payload={version:VERSION,createdAt:new Date().toISOString(),game,mode,count,pool:res.pool,tickets:res.tickets,setDetails,
+      selectionDetails:res.selectionDetails,numberEvidence:res.ranked.out,numberWeights:res.ranked.weights,
+      bonusEvidence:game==='pb'?res.tickets.map((_,i)=>powerballChoice(i,res.ranked)):[],
       powerballs:game==='pb'?res.tickets.map((_,i)=>powerballFor(i,res.ranked)):[],history:res.ranked.history,possibility:res.possibility,generationAudit:res.generationAudit,coverageTheorem:res.coverageTheorem,validation:res.validation};
     try{localStorage.setItem(STORE,JSON.stringify(payload))}catch(_){}
     window.PLATO_LAST_GENERATION={...payload,patterns};
@@ -191,5 +214,5 @@ function install(){
   const select=document.getElementById('v35Game');for(const [key,cfg] of Object.entries(GAME_CFG)){const option=document.createElement('option');option.value=key;option.textContent=cfg.name;select.appendChild(option)}
   select.value='sat';const method=document.getElementById('v35Method');if(method)method.value='astra';document.getElementById('v35Form').addEventListener('submit',run);document.getElementById('v35Generate').disabled=false;
 }
-window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,compare,coveragePoolK,modePool,validatePortfolio,powerballFor,formatTicket,run};install();
+window.PLATO_V35_COVERAGE={VERSION,MODES,MODE_DEFAULTS,portfolio,compare,coveragePoolK,modePool,validatePortfolio,powerballChoice,powerballFor,formatTicket,run};install();
 })();
