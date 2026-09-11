@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-phone-numeric-6';
+const VERSION='3.5-phone-numeric-7-layers';
 const STORE='ORACLE_PLATO_V35_PHONE_V2';
 const MAP={pb:'powerball',sat:'saturday',oz:'oz',sfl:'set_for_life',ww:'windfall'};
 const W={
@@ -72,6 +72,26 @@ function numericSetEvidence(numbers,profile){
  return {tsum,setDroot,q:previous?Math.abs(tsum-previous.tsum):null,referenceDraw:previous?.draw??null,
   terms,score:terms.length?terms.reduce((sum,term)=>sum+term.support,0)/terms.length:0};
 }
+// Separate number-only proposal layers. Their fixed weights are visible in each
+// number's contribution trace; selection never rotates or assigns a layer blindly.
+function numericLayers(rows,n,f,roots,ensemble){
+ const sums=rows.map(row=>row[2].reduce((a,b)=>a+b,0)),last=sums.at(-1),lastQ=Math.abs(last-sums.at(-2)),context={};
+ for(let x=1;x<=n;x++)context[x]=0;
+ for(let i=2;i<rows.length;i++){
+  const prior=sums[i-1],q=Math.abs(prior-sums[i-2]);
+  const similarity=1/(1+Math.abs(prior-last)/n)/(1+Math.abs(q-lastQ)/n)*(digitalRoot(prior)===digitalRoot(last)?1:.5);
+  rows[i][2].forEach(x=>context[x]+=similarity);
+ }
+ const conditional=normObj(context,n),specs=[
+  {id:'frequency_gaps',label:'Frequency and gaps',terms:[['frequency',f.global,.35],['recent_frequency',f.expo,.25],['gap_pressure',f.g.pressure,.25],['individual_droot',roots,.15]]},
+  {id:'relationships',label:'Pairs and transitions',terms:[['pairs',f.pair.assoc,.40],['transitions',f.pair.trans,.30],['recurrence',f.rec,.15],['adjacency',f.structural.adj,.15]]},
+  {id:'sum_root_q',label:'TSUM, DRoot and Q',terms:[['tsum_q_root_context',conditional,.60],['individual_droot',roots,.20],['normalized_sum',f.structural.sum,.20]]}
+ ];
+ return [{id:'ensemble',label:'PLATO combined ranking',out:ensemble},...specs.map(spec=>({id:spec.id,label:spec.label,out:Array.from({length:n},(_,i)=>{
+  const number=i+1,contributions=spec.terms.map(([method,values,weight])=>({method,value:values[number],weight,contribution:weight*values[number]}));
+  return {number,droot:digitalRoot(number),score:contributions.reduce((sum,term)=>sum+term.contribution,0),contributions};
+ }).sort((a,b)=>b.score-a.score||a.number-b.number)}))];
+}
 function rank(game,options={}){
  const history=PLATO_HISTORY.historyFor(game,options),cfg=history.target,rows=history.compatible,key=MAP[game],checkpoint=W[key];
  if(!checkpoint)throw new Error('Unsupported game');if(rows.length<60)throw new Error('Not enough compatible-era history');
@@ -89,7 +109,7 @@ function rank(game,options={}){
   out.push({number:x,droot:digitalRoot(x),score:contributions.reduce((sum,term)=>sum+term.contribution,0),contributions});
  }
  out.sort((a,b)=>b.score-a.score||a.number-b.number);
- return {rows:history.rows,compatibleRows:rows,weights,out,numericProfile:numericProfile(rows),
+ return {rows:history.rows,compatibleRows:rows,weights,out,layers:numericLayers(rows,cfg.n,f,roots,out),numericProfile:numericProfile(rows),
   bonusRanking:game==='pb'?bonusRanking(rows,GAME_CFG.pb.bonusN):[],
   history:{total:history.rows.length,raw:rows.length,structural:f.structural.draws,eras:history.eraCounts,target:cfg}};
 }
@@ -169,5 +189,5 @@ function makePortfolio(game,count){
  const result=PLATO_V35_COVERAGE.portfolio(game,count,'experimental');
  return {rank:result.ranked,k:result.k,pool:result.pool,tickets:result.tickets,generationAudit:result.generationAudit};
 }
-window.PLATO_V35={VERSION,rank,chooseK,makePortfolio,weights:W,featureSet,methodScore,rootScores,numericProfile,numericSetEvidence,bonusRanking,digitalRoot,sumDifference,describeSet,analysePatterns,classifySet};
+window.PLATO_V35={VERSION,rank,chooseK,makePortfolio,weights:W,featureSet,methodScore,rootScores,numericLayers,numericProfile,numericSetEvidence,bonusRanking,digitalRoot,sumDifference,describeSet,analysePatterns,classifySet};
 })();

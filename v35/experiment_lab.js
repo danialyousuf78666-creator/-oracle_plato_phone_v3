@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-const VERSION='3.5-experiment-lab-3-two-systems';
+const VERSION='3.5-experiment-lab-4-layered-systems';
 const DEFAULT_FOLDS=10;
 const VARIANTS=[
   {id:'astra',label:'Astra baseline',kind:'portfolio',mode:'astra',options:{}},
@@ -8,29 +8,6 @@ const VARIANTS=[
 ];
 function hitCount(ticket,target){const set=new Set(target);let c=0;for(const x of ticket)if(set.has(x))c++;return c}
 function bestHit(tickets,target){let best=0;for(const ticket of tickets)best=Math.max(best,hitCount(ticket,target));return best}
-function gcd(a,b){while(b){const t=a%b;a=b;b=t}return Math.abs(a)}
-function systematicControlPortfolio(cfg,count,anchor){
-  const seen=new Set(),tickets=[];
-  const strides=[];for(let s=2;s<cfg.n;s++)if(gcd(s,cfg.n)===1)strides.push(s);
-  for(let t=0;t<count;t++){
-    let made=null;
-    for(let attempt=0;attempt<cfg.n&&!made;attempt++){
-      const stride=strides[(anchor+t+attempt)%strides.length]||1,start=(anchor+t*3+attempt)%cfg.n,a=[];
-      for(let j=0;j<cfg.r;j++)a.push(1+((start+j*stride)%cfg.n));
-      const ticket=[...new Set(a)].sort((x,y)=>x-y),key=ticket.join('-');
-      if(ticket.length===cfg.r&&!seen.has(key)){seen.add(key);made=ticket}
-    }
-    if(!made)throw new Error('Systematic control could not build a unique portfolio.');
-    tickets.push(made);
-  }
-  return tickets;
-}
-function mergeUnique(a,b,count,astraShare){
-  const needA=Math.round(count*astraShare),out=[],seen=new Set();
-  function add(list,limit){let added=0;for(const t of list){if(added>=limit)break;const k=t.join('-');if(seen.has(k))continue;seen.add(k);out.push(t);added++}}
-  add(a,needA);add(b,count-out.length);if(out.length<count)add(a,count-out.length);if(out.length<count)add(b,count-out.length);
-  return out.slice(0,count);
-}
 function targetRows(game,folds=DEFAULT_FOLDS){
   const latest=PLATO_HISTORY.ERAS[game].at(-1),rows=[...PLATO_DATA.SEED_DATA[game]].sort((a,b)=>a[0]-b[0]);
   const current=rows.filter(row=>{const era=PLATO_HISTORY.eraFor(game,row[0]);return era&&era.start===latest.start&&row[2].length===latest.r});
@@ -41,15 +18,13 @@ function buildTickets(game,count,targetId,variant,ranked,cache={}){
   const shared={beforeDraw:targetId,rankedResult:ranked,skipDiagnostics:true};
   const get=(key,mode,opts={})=>cache[key]||(cache[key]=PLATO_V35_COVERAGE.portfolio(game,count,mode,{...shared,...opts}).tickets);
   if(variant.kind==='portfolio')return get(variant.id,variant.mode,variant.options);
-  if(variant.kind==='blend'){const a=get('astra','astra'),e=get('experimental','experimental');return mergeUnique(a,e,count,variant.astraShare)}
-  if(variant.kind==='systematic')return systematicControlPortfolio(GAME_CFG[game],count,(targetId+ranked.history.raw)%GAME_CFG[game].n);
   throw new Error('Unknown lab variant.');
 }
 function emptyMetric(r){return {folds:0,exact:0,atLeast6:0,atLeast5:0,atLeast4:0,bestHitSum:0,bestHitCounts:Array(r+1).fill(0),valid:true}}
 function finalizeMetric(m,r){return {...m,meanBest:m.folds?m.bestHitSum/m.folds:0,exactRate:m.folds?m.exact/m.folds:0,fivePlusRate:m.folds?m.atLeast5/m.folds:0,fourPlusRate:m.folds?m.atLeast4/m.folds:0,target:`${r}/${r}`}}
 function compareMetric(a,b){return b.exact-a.exact||b.atLeast5-a.atLeast5||b.atLeast4-a.atLeast4||b.atLeast6-a.atLeast6||b.meanBest-a.meanBest||a.label.localeCompare(b.label)}
 function benchmark(game,count,options={}){
-  const cfg=GAME_CFG[game];if(!cfg)throw new Error('Unsupported game.');if(!Number.isInteger(count)||count<1||count>100)throw new Error('Choose 1–100 whole tickets.');
+  const cfg=GAME_CFG[game];if(!cfg)throw new Error('Unsupported game.');if(!Number.isSafeInteger(count)||count<1)throw new Error('Choose a positive whole ticket count.');if(count>PLATO_V35_SPACE.choose(cfg.n,cfg.r))throw new Error('Ticket count exceeds all unique number combinations.');
   const folds=Number.isInteger(options.folds)?options.folds:DEFAULT_FOLDS,targets=targetRows(game,folds);if(!targets.length)throw new Error('Not enough current-era draws for lab.');
   const variants=options.variants||VARIANTS,metrics=Object.fromEntries(variants.map(v=>[v.id,emptyMetric(cfg.r)]));
   for(const target of targets){
@@ -76,10 +51,10 @@ async function run(){
   try{
     const res=benchmark(game,count,{folds:DEFAULT_FOLDS}),cfg=GAME_CFG[game],winner=res.results[0];
     summary.textContent=`${cfg.name} · ${res.folds} unseen historical targets · ${count} tickets/variant · ${res.pass?'PASS':'FAIL'} · top: ${winner.label}`;
-    out.innerHTML=`<div class="labscroll"><table><thead><tr><th>Variant</th><th>Validity</th><th>${cfg.r}/${cfg.r}</th><th>5+</th><th>4+</th><th>Mean best</th></tr></thead><tbody>${res.results.map(r=>rowHtml(r,cfg)).join('')}</tbody></table></div><p class="labnote">Ranking priority: exact ${cfg.r}/${cfg.r}, then 5+, then 4+. The systematic control is benchmark-only and deterministic. PASS is a leakage/validity software check, not evidence of predictive edge. Uniform-chance exact expectation: ${res.uniformChanceExactExpectation==null?'n/a':res.uniformChanceExactExpectation.toExponential(2)}.</p>`;
+    out.innerHTML=`<div class="labscroll"><table><thead><tr><th>Variant</th><th>Validity</th><th>${cfg.r}/${cfg.r}</th><th>5+</th><th>4+</th><th>Mean best</th></tr></thead><tbody>${res.results.map(r=>rowHtml(r,cfg)).join('')}</tbody></table></div><p class="labnote">Ranking priority: exact ${cfg.r}/${cfg.r}, then 5+, then 4+. Both variants use the same number-only selection code used for live entries. PASS is a leakage/validity software check, not evidence of predictive edge. Uniform-chance exact expectation: ${res.uniformChanceExactExpectation==null?'n/a':res.uniformChanceExactExpectation.toExponential(2)}.</p>`;
     window.PLATO_LAST_LAB=res;
   }catch(e){summary.textContent=String(e.message||e)}finally{btn.disabled=false;btn.textContent='Run Experiment Lab'}
 }
 function install(){const b=document.getElementById('v35RunLab');if(b)b.addEventListener('click',run)}
-window.PLATO_V35_LAB={VERSION,DEFAULT_FOLDS,VARIANTS,hitCount,bestHit,systematicControlPortfolio,mergeUnique,targetRows,benchmark,run};install();
+window.PLATO_V35_LAB={VERSION,DEFAULT_FOLDS,VARIANTS,hitCount,bestHit,targetRows,benchmark,run};install();
 })();
