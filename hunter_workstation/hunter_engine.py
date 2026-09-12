@@ -135,7 +135,6 @@ def analyze_video(
     auto_map, ocr_diag = identity_probabilities_from_ocr(ocr_obs) if ocr_enabled else (
         {}, {"tracks": {}, "global_assignment": {}, "abstained": []}
     )
-    # Explicit/direct evidence has precedence. No unknown track is ever randomly numbered.
     resolved = dict(auto_map)
     resolved.update(external)
     resolved.update(direct)
@@ -195,7 +194,6 @@ def analyze_video(
             n = int(rec["number"])
             number_scores[n] = max(number_scores.get(n, -1.0), float(final))
 
-    # Put scientifically usable trajectories first; retain every fragment for audit.
     ranked.sort(key=lambda r: (not bool(r["trajectory_eligible"]), -r["score"], r["track_id"]))
     valid = sorted(number_scores.items(), key=lambda x: (-x[1], x[0]))
     top6 = sorted(n for n, _ in valid[:6]) if len(valid) >= 6 else []
@@ -271,9 +269,7 @@ def analyze_video(
             "quality": tracking_qc,
         },
         "quality_gate": {
-            "trajectory": {
-                k: v for k, v in tracking_qc.items() if k != "per_track"
-            },
+            "trajectory": {k: v for k, v in tracking_qc.items() if k != "per_track"},
             "identity": identity_qc,
             "top6_allowed": bool(tracking_qc.get("trajectory_gate_pass") and identity_qc["pass"]),
         },
@@ -311,7 +307,7 @@ def score_locked_report(report: dict[str, Any], actual_numbers: list[int] | set[
     pred = set(report.get("top6") or [])
     ranked = [
         r.get("number") for r in report.get("anonymous_track_ranking", [])
-        if r.get("trajectory_eligible") and r.get("number") is not None
+        if r.get("trajectory_eligible", True) and r.get("number") is not None
     ]
     return {
         "top6_hits": len(pred & actual),
