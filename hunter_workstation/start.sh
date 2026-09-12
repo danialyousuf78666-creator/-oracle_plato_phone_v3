@@ -2,11 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p runs
-if pgrep -f "streamlit run app_v05.py" >/dev/null 2>&1; then
-  echo "Hunter Workstation v0.5 already running on port 8501"
+if pgrep -f "streamlit run app_final.py" >/dev/null 2>&1; then
+  echo "Hunter Mobile Lab already running on port 8501"
   exit 0
 fi
-nohup python -m streamlit run app_v05.py \
+nohup python -m streamlit run app_final.py \
   --server.port 8501 \
   --server.address 0.0.0.0 \
   --server.headless true \
@@ -19,10 +19,10 @@ import socket
 s=socket.socket(); s.settimeout(.25); ok=s.connect_ex(('127.0.0.1',8501))==0; s.close(); raise SystemExit(0 if ok else 1)
 PY
   then
-    echo "Hunter Workstation v0.5 ready on port 8501"
+    echo "Hunter Mobile Lab ready on port 8501"
     exit 0
   fi
   sleep 1
 done
-echo "Hunter v0.5 failed to become ready; inspect hunter_workstation/runs/streamlit.log" >&2
+echo "Hunter Mobile Lab failed to become ready; inspect hunter_workstation/runs/streamlit.log" >&2
 exit 1
