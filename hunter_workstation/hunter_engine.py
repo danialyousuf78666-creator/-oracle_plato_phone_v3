@@ -1,14 +1,22 @@
 from __future__ import annotations
-import json, math
+
+import json
+import math
 from pathlib import Path
 from typing import Any
+
 import cv2
 import numpy as np
-from hunter_common import ENGINE_VERSION, Detection, TrackPoint, Track, EnsembleBallDetector, HungarianTracker, mask_frame, clip, sha256_file, canonical_hash, lock_report
-from hunter_physics import track_features, MarkovModel, discretize_state, track_state, radiation_score, base_score
+
+from hunter_common import Detection, TrackPoint, Track, EnsembleBallDetector, mask_frame, clip, sha256_file, canonical_hash, lock_report
+from hunter_physics import track_features, MarkovModel, track_state, radiation_score, base_score
 from hunter_signals import _validated_frequency, _extract_audio_envelope, _resample_signal, _lagged_correlation, _global_signal_context
 from hunter_recovery import RecoveryState, HeadRouter
-from hunter_identity import _tesseract_available, _safe_ball_crop, ocr_ball_number, identity_probabilities_from_ocr, resolve_external_identity_probs
+from hunter_identity import _tesseract_available, ocr_ball_number, identity_probabilities_from_ocr, resolve_external_identity_probs
+from hunter_tracking import ObservationCentricTracker, tracking_quality_summary
+
+ENGINE_VERSION = "hunter-workstation-0.5.0"
+
 
 def _collision_candidates(tracks: list[Track], threshold_px: float = 28.0) -> dict[int, int]:
     by_frame: dict[int, list[tuple[int, float, float]]] = {}
@@ -42,7 +50,13 @@ def analyze_video(
     ocr_every_n_frames: int = 8,
     detector_config: dict[str, Any] | None = None,
     tracker_config: dict[str, Any] | None = None,
+    cutoff_verified_by_operator: bool = False,
 ) -> dict[str, Any]:
+    """Analyze only the supplied pre-cutoff video evidence.
+
+    The engine never receives actual winning numbers. A numbered Top-6 is emitted
+    only when at least six identities are attached to trajectory-eligible tracks.
+    """
     video_path = Path(video_path)
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -57,7 +71,7 @@ def analyze_video(
     dcfg = dict(detector_config or {})
     tcfg = dict(tracker_config or {})
     detector = EnsembleBallDetector(**dcfg)
-    tracker = HungarianTracker(**tcfg)
+    tracker = ObservationCentricTracker(**tcfg)
     ocr_obs: dict[int, list[dict[str, Any]]] = {}
     brightness_series: list[float] = []
     motion_series: list[float] = []
@@ -76,7 +90,6 @@ def analyze_video(
         gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
         active_pixels = gray[gray > 0]
         brightness_series.append(float(np.mean(active_pixels)) if active_pixels.size else 0.0)
-        # Row-wise brightness variation is a conservative rolling-shutter/scan nuisance proxy.
         row_mean = np.mean(gray.astype(float), axis=1)
         denom = float(np.std(gray.astype(float))) + 1e-9
         row_artifact_series.append(clip(float(np.std(np.diff(row_mean))) / denom))
@@ -84,26 +97,30 @@ def analyze_video(
         detections = detector.detect(masked, fi)
         detections_total += len(detections)
         if detections:
-            centroid=(float(np.mean([d.x for d in detections])), float(np.mean([d.y for d in detections])))
+            centroid = (
+                float(np.mean([d.x for d in detections])),
+                float(np.mean([d.y for d in detections])),
+            )
             if prev_centroid is None:
                 motion_series.append(0.0)
             else:
-                motion_series.append(float(math.hypot(centroid[0]-prev_centroid[0], centroid[1]-prev_centroid[1])))
-            prev_centroid=centroid
+                motion_series.append(float(math.hypot(centroid[0] - prev_centroid[0], centroid[1] - prev_centroid[1])))
+            prev_centroid = centroid
         else:
             motion_series.append(0.0)
+
         assignments = tracker.update(detections)
         if ocr_enabled and (fi % max(1, int(ocr_every_n_frames)) == 0):
             for tid, d in assignments:
-                # OCR the original frame crop; result overlays are already cut off chronologically, and masks are applied spatially.
-                evidence = ocr_ball_number(masked, d)
-                for row in evidence:
-                    row = dict(row)
+                for evidence in ocr_ball_number(masked, d):
+                    row = dict(evidence)
                     row["frame"] = fi
                     ocr_obs.setdefault(tid, []).append(row)
         fi += 1
     cap.release()
 
+    tracking_qc = tracking_quality_summary(tracker.tracks, fps, fi, detections_total)
+    eligible_ids = {int(x) for x in tracking_qc.get("eligible_track_ids", [])}
     global_context = _global_signal_context(
         brightness_series, motion_series, fps, video_path, cutoff_seconds, row_artifact_series
     )
@@ -115,12 +132,18 @@ def analyze_video(
 
     direct = {int(k): int(v) for k, v in (identity_map or {}).items()}
     external = resolve_external_identity_probs(identity_probs)
-    auto_map, ocr_diag = identity_probabilities_from_ocr(ocr_obs) if ocr_enabled else ({}, {"tracks": {}, "global_assignment": {}, "abstained": []})
-    # Strict precedence: explicit direct map > supplied probability assignment > OCR evidence.
+    auto_map, ocr_diag = identity_probabilities_from_ocr(ocr_obs) if ocr_enabled else (
+        {}, {"tracks": {}, "global_assignment": {}, "abstained": []}
+    )
+    # Explicit/direct evidence has precedence. No unknown track is ever randomly numbered.
     resolved = dict(auto_map)
     resolved.update(external)
     resolved.update(direct)
-    identity_mode = "direct_map" if direct else ("external_global_assignment" if external else ("auto_ocr_global_assignment" if auto_map else "anonymous"))
+    identity_mode = "direct_map" if direct else (
+        "external_global_assignment" if external else (
+            "auto_ocr_global_assignment" if auto_map else "anonymous"
+        )
+    )
 
     collisions = _collision_candidates(tracker.tracks)
     ranked: list[dict[str, Any]] = []
@@ -133,6 +156,8 @@ def analyze_video(
         rad = radiation_score(t, fps, extraction_zone)
         ranked.append({
             "track_id": t.track_id,
+            "trajectory_eligible": t.track_id in eligible_ids,
+            "tracking_diagnostics": tracking_qc.get("per_track", {}).get(str(t.track_id), {}),
             "number": resolved.get(t.track_id),
             "base_score": bs,
             "markov": mk,
@@ -166,19 +191,41 @@ def analyze_video(
             "B6_specialists": b6,
             "B7_full_hybrid": float(final),
         }
-        if rec["number"] is not None and 1 <= int(rec["number"]) <= 45:
+        if rec["trajectory_eligible"] and rec["number"] is not None and 1 <= int(rec["number"]) <= 45:
             n = int(rec["number"])
             number_scores[n] = max(number_scores.get(n, -1.0), float(final))
 
-    ranked.sort(key=lambda r: (-r["score"], r["track_id"]))
+    # Put scientifically usable trajectories first; retain every fragment for audit.
+    ranked.sort(key=lambda r: (not bool(r["trajectory_eligible"]), -r["score"], r["track_id"]))
     valid = sorted(number_scores.items(), key=lambda x: (-x[1], x[0]))
     top6 = sorted(n for n, _ in valid[:6]) if len(valid) >= 6 else []
+
+    if not tracking_qc.get("trajectory_gate_pass"):
+        top6_status = "tracking_quality_gate_failed"
+        top6 = []
+    elif len(top6) < 6:
+        top6_status = "insufficient_numbered_tracks"
+    else:
+        top6_status = "locked_candidate"
+
+    numbered_eligible = sum(
+        1 for rec in ranked
+        if rec.get("trajectory_eligible") and rec.get("number") is not None
+    )
+    identity_qc = {
+        "numbered_eligible_tracks": numbered_eligible,
+        "required_for_top6": 6,
+        "pass": numbered_eligible >= 6,
+        "abstention_enforced": numbered_eligible < 6,
+    }
 
     config = {
         "extraction_zone": list(map(float, extraction_zone)),
         "chamber_roi": None if chamber_roi is None else list(map(float, chamber_roi)),
         "overlay_masks": [list(map(float, x)) for x in (overlay_masks or [])],
         "cutoff_seconds": cutoff_seconds,
+        "cutoff_verified_by_operator": bool(cutoff_verified_by_operator),
+        "cutoff_policy": "pre_extraction_and_pre_result_required",
         "radiation_weight": rw,
         "specialist_weight": sw,
         "auto_ocr": bool(auto_ocr),
@@ -194,6 +241,12 @@ def analyze_video(
         "post_draw_adjustment": False,
         "input_sha256": sha256_file(video_path),
         "config_sha256": canonical_hash(config),
+        "protocol": {
+            "cutoff_policy": "pre_extraction_and_pre_result_required",
+            "cutoff_verified_by_operator": bool(cutoff_verified_by_operator),
+            "actual_result_available_to_engine": False,
+            "prediction_must_be_locked_before_scoring": True,
+        },
         "broadcast_protection": {
             "chamber_roi": chamber_roi,
             "overlay_masks": overlay_masks or [],
@@ -212,6 +265,18 @@ def analyze_video(
             "tracks_total": len(tracker.tracks),
             "config": dcfg,
         },
+        "tracker": {
+            "type": "observation_centric_hungarian_v0_5",
+            "config": tcfg,
+            "quality": tracking_qc,
+        },
+        "quality_gate": {
+            "trajectory": {
+                k: v for k, v in tracking_qc.items() if k != "per_track"
+            },
+            "identity": identity_qc,
+            "top6_allowed": bool(tracking_qc.get("trajectory_gate_pass") and identity_qc["pass"]),
+        },
         "markov_trained": len(markov.states) > 1,
         "radiation_weight": rw,
         "specialist_weight": sw,
@@ -225,7 +290,7 @@ def analyze_video(
         },
         "signals": global_context,
         "anonymous_track_ranking": ranked,
-        "top6_status": "locked_candidate" if len(top6) == 6 else "insufficient_numbered_tracks",
+        "top6_status": top6_status,
         "top6": top6,
         "audit": recovery.audit(),
         "config": config,
@@ -244,10 +309,14 @@ def score_locked_report(report: dict[str, Any], actual_numbers: list[int] | set[
     if len(actual) != 6 or any(x < 1 or x > 45 for x in actual):
         raise ValueError("actual result must contain exactly six unique numbers from 1 to 45")
     pred = set(report.get("top6") or [])
-    ranked = [r.get("number") for r in report.get("anonymous_track_ranking", []) if r.get("number") is not None]
+    ranked = [
+        r.get("number") for r in report.get("anonymous_track_ranking", [])
+        if r.get("trajectory_eligible") and r.get("number") is not None
+    ]
     return {
         "top6_hits": len(pred & actual),
         "top10_capture": len(actual & set(ranked[:10])),
         "top15_capture": len(actual & set(ranked[:15])),
         "prediction_available": len(pred) == 6,
+        "top6_status": report.get("top6_status"),
     }
