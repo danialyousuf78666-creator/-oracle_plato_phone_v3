@@ -45,17 +45,20 @@ jobs:
             hunter_workstation/hunter_identity.py \
             hunter_workstation/hunter_recovery.py \
             hunter_workstation/hunter_signals.py \
+            hunter_workstation/hunter_randomness.py \
             hunter_workstation/app.py \
             hunter_workstation/app_v05.py \
+            hunter_workstation/app_final.py \
             hunter_workstation/batch.py
       - name: Verify external runtime
         run: |
           ffmpeg -version | head -1
           tesseract --version | head -1
+          python -m yt_dlp --version
       - name: Run Hunter tests
         working-directory: hunter_workstation
         run: PYTHONPATH=. pytest -q tests
-      - name: Streamlit v0.5 startup smoke test
+      - name: Streamlit mobile-lab startup smoke test
         run: |
           bash hunter_workstation/start.sh
           for i in $(seq 1 45); do
