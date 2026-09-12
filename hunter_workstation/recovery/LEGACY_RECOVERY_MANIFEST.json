@@ -1,0 +1,52 @@
+{
+  "claim_boundary": "Recovered software behavior and provenance only. No claim of calibrated physical truth, resonance, or lottery predictive edge.",
+  "critical_hash_comparison": {
+    "head.py": {
+      "drive_candidate": "4983de86f59515469d19ecc202fe17e41b06f8f74d0884cd614b6e52f26d4aa9",
+      "freeze_expected": "1c945f18a0fcf0205003be76e137134820d3c63eb51b67115a28a12eec09bfba",
+      "match": false
+    },
+    "long_video_collector.py": {
+      "drive_candidate": "070886de3466c0d5c2c9457be7d1f34786a8a429e1b65e726d83c6d0b0289d7a",
+      "freeze_expected": "00faa5e16dce415aafed4ffc7277f23c6c0b23e44904ad908390e175071d07a2",
+      "match": false
+    },
+    "main.py": {
+      "drive_candidate": "293e4230168d8e5a3e493441a9268d0e2d427007adfeeac131103bddea1e8cae",
+      "freeze_expected": "c704e72f5bbcd5ef5fa0157d1394704fab36d75c37eda1bf2c355b83b90e949c",
+      "match": false
+    },
+    "signal_utils.py": {
+      "drive_candidate": "694e7cdf49357f3b6af1795ce744c6df9b915cf9b765e5c08ebfeabde4c8008d",
+      "freeze_expected": "e1ed87f8f405f3af4ed77e218d88231195efc7958b7eff4e642958782a69f39a",
+      "match": false
+    },
+    "signature_store.py": {
+      "drive_candidate": "f5dd28921bcb68d394a21d5f475495e8a8666fdfe561e5f59214ec75d51f2091",
+      "freeze_expected": "4476637345f1e0cdabb56e296c90c550bcf60b2b1a48afbcab283d7d4461c3a3",
+      "match": false
+    },
+    "specialists.py": {
+      "drive_candidate": "03e3d36c27f8c158c704dc1454ff3788f2f506dcabfa12d823f8548fb16cd499",
+      "freeze_expected": "957bcab9dcd8a135e230aeb7de0a44dd254199d8a48b4cd151e1eec3fe097299",
+      "match": false
+    }
+  },
+  "exact_freeze_restored": false,
+  "freeze_source_tree_sha256": "c77f4cdb033e6e639e75d269cfd649a68091fa59c63bf08db165d5475e6d082c",
+  "reason": "A Drive-recovered v0.2.6 candidate source tree was found, but every checked critical file hash differs from the preserved freeze. It is retained as evidence/candidate history, not represented as byte-identical restoration.",
+  "recovered_state": {
+    "raw_state_published_to_public_repo": false,
+    "sanitized_reliability_profile": "legacy_reliability.json",
+    "session_report_sha256": "3a1a3c2443ad381adb25757dc42eeb7c3f15edc9422ab6c0bf03a3eb8794e31e",
+    "shared_memory_sha256": "a70a022b0707ced05d028e12eda4bdbdb036d0892c273ebb26c1690659533ac4"
+  },
+  "schema": "hunter_legacy_recovery_manifest_v1",
+  "validation_completed_locally": {
+    "drive_recovered_controlled_lab_cases": "10/10 executed",
+    "drive_recovered_v0_2_6_candidate_pytest": "15 passed",
+    "hunter_0_4_pytest": "14 passed",
+    "notes": "GitHub CI is the deployment-environment gate; this manifest does not claim lottery predictive edge.",
+    "starter_physics_core_pytest": "11 passed"
+  }
+}
