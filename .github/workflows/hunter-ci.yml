@@ -3,7 +3,7 @@ name: Hunter CI
 on:
   workflow_dispatch:
   push:
-    branches: ["main", "hunter-workstation"]
+    branches: ["main", "hunter-*"]
     paths:
       - "hunter_workstation/**"
       - ".devcontainer/devcontainer.json"
@@ -20,7 +20,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
@@ -36,7 +36,18 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r hunter_workstation/requirements.txt
       - name: Compile Hunter
-        run: python -m py_compile hunter_workstation/hunter_engine.py hunter_workstation/app.py hunter_workstation/batch.py
+        run: |
+          python -m py_compile \
+            hunter_workstation/hunter_engine.py \
+            hunter_workstation/hunter_tracking.py \
+            hunter_workstation/hunter_common.py \
+            hunter_workstation/hunter_physics.py \
+            hunter_workstation/hunter_identity.py \
+            hunter_workstation/hunter_recovery.py \
+            hunter_workstation/hunter_signals.py \
+            hunter_workstation/app.py \
+            hunter_workstation/app_v05.py \
+            hunter_workstation/batch.py
       - name: Verify external runtime
         run: |
           ffmpeg -version | head -1
@@ -44,10 +55,10 @@ jobs:
       - name: Run Hunter tests
         working-directory: hunter_workstation
         run: PYTHONPATH=. pytest -q tests
-      - name: Streamlit startup smoke test
+      - name: Streamlit v0.5 startup smoke test
         run: |
           bash hunter_workstation/start.sh
-          for i in $(seq 1 30); do
+          for i in $(seq 1 45); do
             if curl -fsS http://127.0.0.1:8501/_stcore/health; then exit 0; fi
             sleep 1
           done
