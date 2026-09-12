@@ -46,9 +46,11 @@ jobs:
             hunter_workstation/hunter_recovery.py \
             hunter_workstation/hunter_signals.py \
             hunter_workstation/hunter_randomness.py \
+            hunter_workstation/hunter_randomness_v2.py \
             hunter_workstation/app.py \
             hunter_workstation/app_v05.py \
             hunter_workstation/app_final.py \
+            hunter_workstation/app_command_center.py \
             hunter_workstation/batch.py
       - name: Verify external runtime
         run: |
@@ -58,7 +60,7 @@ jobs:
       - name: Run Hunter tests
         working-directory: hunter_workstation
         run: PYTHONPATH=. pytest -q tests
-      - name: Streamlit mobile-lab startup smoke test
+      - name: Streamlit command-center startup smoke test
         run: |
           bash hunter_workstation/start.sh
           for i in $(seq 1 45); do
