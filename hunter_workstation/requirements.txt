@@ -3,5 +3,7 @@ scipy>=1.11,<2
 opencv-python-headless>=4.9,<5
 streamlit>=1.38,<2
 pandas>=2.2,<4
+requests>=2.31,<3
 pytesseract>=0.3.13,<1
+yt-dlp>=2026.8.0
 pytest>=8,<10
