@@ -1,0 +1,29 @@
+{
+  "applicable_observation_counts": {
+    "M10_RELATIONSHIP": 1,
+    "M11_CHALLENGER": 1,
+    "M1_VISUAL": 1,
+    "M2_MOTION": 1,
+    "M3_FREQUENCY": 1,
+    "M4_OPTICAL": 1,
+    "M5_GEOMETRY": 1,
+    "M6_ACOUSTIC": 1,
+    "M7_RESONANCE": 1,
+    "M8_ANOMALY": 1
+  },
+  "claim_boundary": "Heuristic historical evidence reliability only; not calibrated probabilities and not winning-number evidence.",
+  "schema": "hunter_legacy_reliability_v1",
+  "source": "sanitized aggregate derived from recovered Hunter shared_memory; raw session/video state intentionally not published",
+  "specialist_reliability": {
+    "M10_RELATIONSHIP": 0.236,
+    "M11_CHALLENGER": 0.9442,
+    "M1_VISUAL": 0.954,
+    "M2_MOTION": 0.7061,
+    "M3_FREQUENCY": 1.0,
+    "M4_OPTICAL": 1.0,
+    "M5_GEOMETRY": 0.5,
+    "M6_ACOUSTIC": 0.9,
+    "M7_RESONANCE": 0.6,
+    "M8_ANOMALY": 0.4695
+  }
+}

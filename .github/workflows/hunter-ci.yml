@@ -1,0 +1,55 @@
+name: Hunter CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "hunter-workstation"]
+    paths:
+      - "hunter_workstation/**"
+      - ".devcontainer/devcontainer.json"
+      - ".github/workflows/hunter-ci.yml"
+  pull_request:
+    paths:
+      - "hunter_workstation/**"
+      - ".devcontainer/devcontainer.json"
+      - ".github/workflows/hunter-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg tesseract-ocr
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: hunter_workstation/requirements.txt
+      - name: Install Python dependencies
+        run: python -m pip install -r hunter_workstation/requirements.txt
+      - name: Compile Hunter
+        run: python -m py_compile hunter_workstation/hunter_engine.py hunter_workstation/app.py hunter_workstation/batch.py
+      - name: Verify external runtime
+        run: |
+          ffmpeg -version | head -1
+          tesseract --version | head -1
+      - name: Run Hunter tests
+        working-directory: hunter_workstation
+        run: PYTHONPATH=. pytest -q tests
+      - name: Streamlit startup smoke test
+        run: |
+          bash hunter_workstation/start.sh
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8501/_stcore/health; then exit 0; fi
+            sleep 1
+          done
+          cat hunter_workstation/runs/streamlit.log
+          exit 1
