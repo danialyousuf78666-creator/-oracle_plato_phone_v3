@@ -1,7 +1,7 @@
 {
   "name": "Hunter Workstation",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
-  "postCreateCommand": "python -m pip install --upgrade pip && pip install -r hunter_workstation/requirements.txt",
+  "postCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg tesseract-ocr && python -m pip install --upgrade pip && pip install -r hunter_workstation/requirements.txt",
   "postStartCommand": "bash hunter_workstation/start.sh",
   "postAttachCommand": "bash hunter_workstation/start.sh",
   "forwardPorts": [8501],
