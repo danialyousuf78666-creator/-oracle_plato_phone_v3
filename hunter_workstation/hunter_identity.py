@@ -1,14 +1,19 @@
 from __future__ import annotations
-import math, re
+
+import re
 from typing import Any
+
 import cv2
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+
 from hunter_common import Detection
+
 try:
     import pytesseract
 except Exception:
-    pytesseract=None
+    pytesseract = None
+
 
 def _tesseract_available() -> bool:
     if pytesseract is None:
@@ -31,7 +36,7 @@ def _safe_ball_crop(frame: np.ndarray, d: Detection, scale: float = 1.35) -> np.
 
 
 def ocr_ball_number(frame: np.ndarray, d: Detection) -> list[dict[str, Any]]:
-    """Deterministic OCR evidence only. Never invent a number when OCR is weak."""
+    """Return OCR evidence only; never invent a number when OCR is weak."""
     if not _tesseract_available():
         return []
     crop = _safe_ball_crop(frame, d)
@@ -42,9 +47,8 @@ def ocr_ball_number(frame: np.ndarray, d: Detection) -> list[dict[str, Any]]:
     gray = cv2.copyMakeBorder(gray, 24, 24, 24, 24, cv2.BORDER_CONSTANT, value=255)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     _, otsu = cv2.threshold(clahe, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    inv = 255 - otsu
-    variants = [clahe, otsu, inv]
-    results = []
+    variants = [clahe, otsu, 255 - otsu]
+    results: list[dict[str, Any]] = []
     config = "--psm 10 -c tessedit_char_whitelist=0123456789"
     for vi, img in enumerate(variants):
         try:
@@ -62,59 +66,101 @@ def ocr_ball_number(frame: np.ndarray, d: Detection) -> list[dict[str, Any]]:
                 c = -1.0
             if 1 <= n <= 45 and c >= 0:
                 results.append({"number": n, "confidence": c, "variant": vi})
-    best = {}
+    best: dict[int, dict[str, Any]] = {}
     for row in results:
-        n = row["number"]
-        if n not in best or row["confidence"] > best[n]["confidence"]:
+        n = int(row["number"])
+        if n not in best or float(row["confidence"]) > float(best[n]["confidence"]):
             best[n] = row
-    return sorted(best.values(), key=lambda r: (-r["confidence"], r["number"]))
+    return sorted(best.values(), key=lambda r: (-float(r["confidence"]), int(r["number"])))
+
+
+def _collapse_to_independent_frames(obs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one strongest OCR hypothesis per frame.
+
+    Different preprocessing variants of the same crop are correlated evidence and
+    must not count as independent observations. Older test/state records without a
+    frame field are treated as separate legacy observations for compatibility.
+    """
+    grouped: dict[str, dict[str, Any]] = {}
+    for idx, o in enumerate(obs):
+        key = f"frame:{o['frame']}" if o.get("frame") is not None else f"legacy:{idx}"
+        row = {
+            "number": int(o["number"]),
+            "confidence": max(0.0, float(o.get("confidence", 0.0))),
+            "frame": o.get("frame"),
+        }
+        prev = grouped.get(key)
+        if prev is None or row["confidence"] > prev["confidence"] or (
+            row["confidence"] == prev["confidence"] and row["number"] < prev["number"]
+        ):
+            grouped[key] = row
+    return list(grouped.values())
 
 
 def identity_probabilities_from_ocr(
     observations: dict[int, list[dict[str, Any]]],
     min_observations: int = 2,
-    min_mean_confidence: float = 20.0,
+    min_mean_confidence: float = 25.0,
     min_top_share: float = 0.55,
     min_margin: float = 0.12,
+    min_support_frames: int = 2,
 ) -> tuple[dict[int, int], dict[str, Any]]:
-    """Conservative per-track OCR posterior + global one-to-one assignment."""
+    """Conservative independent-frame OCR posterior + global one-to-one assignment."""
     track_ids = sorted(observations)
     numbers = list(range(1, 46))
     qualified: list[int] = []
     row_probs: list[np.ndarray] = []
     diagnostics: dict[str, Any] = {"tracks": {}, "global_assignment": {}, "abstained": []}
+
     for tid in track_ids:
-        obs = observations.get(tid, [])
+        raw_obs = observations.get(tid, [])
+        obs = _collapse_to_independent_frames(raw_obs)
         mass = np.ones(45, dtype=float) * 1e-3
-        strong_count = 0
-        confs = []
+        strong: list[dict[str, Any]] = []
         for o in obs:
-            n, conf = int(o["number"]), max(0.0, float(o["confidence"]))
+            n = int(o["number"])
+            conf = max(0.0, float(o["confidence"]))
             if 1 <= n <= 45:
                 mass[n - 1] += max(0.01, conf / 100.0)
                 if conf >= min_mean_confidence:
-                    strong_count += 1
-                    confs.append(conf)
+                    strong.append(o)
+
         p = mass / mass.sum()
         order = np.argsort(-p)
         top_i, second_i = int(order[0]), int(order[1])
-        top_share, margin = float(p[top_i]), float(p[top_i] - p[second_i])
-        mean_conf = float(np.mean(confs)) if confs else 0.0
+        top_number = top_i + 1
+        top_share = float(p[top_i])
+        margin = float(p[top_i] - p[second_i])
+        top_support = [o for o in strong if int(o["number"]) == top_number]
+        mean_top_conf = float(np.mean([float(o["confidence"]) for o in top_support])) if top_support else 0.0
+        support_frames = len(top_support)
+
         diagnostics["tracks"][str(tid)] = {
-            "raw_observations": len(obs),
-            "strong_observations": strong_count,
-            "mean_strong_confidence": round(mean_conf, 3),
-            "top_number": top_i + 1,
+            "raw_variant_observations": len(raw_obs),
+            "independent_frames": len(obs),
+            "strong_independent_frames": len(strong),
+            "top_number": top_number,
+            "top_support_frames": support_frames,
+            "mean_top_confidence": round(mean_top_conf, 3),
             "top_probability": round(top_share, 6),
             "margin": round(margin, 6),
         }
-        if strong_count >= min_observations and mean_conf >= min_mean_confidence and top_share >= min_top_share and margin >= min_margin:
+
+        if (
+            len(obs) >= min_observations
+            and support_frames >= min_support_frames
+            and mean_top_conf >= min_mean_confidence
+            and top_share >= min_top_share
+            and margin >= min_margin
+        ):
             qualified.append(tid)
             row_probs.append(p)
         else:
             diagnostics["abstained"].append(tid)
+
     if not qualified:
         return {}, diagnostics
+
     mat = np.vstack(row_probs)
     cost = -np.log(np.clip(mat, 1e-12, 1.0))
     rows, cols = linear_sum_assignment(cost)
@@ -125,7 +171,10 @@ def identity_probabilities_from_ocr(
         top = float(np.max(mat[r]))
         if prob >= max(0.25, 0.70 * top):
             out[tid] = numbers[c]
-            diagnostics["global_assignment"][str(tid)] = {"number": numbers[c], "probability": round(prob, 6)}
+            diagnostics["global_assignment"][str(tid)] = {
+                "number": numbers[c],
+                "probability": round(prob, 6),
+            }
         else:
             diagnostics["abstained"].append(tid)
     diagnostics["abstained"] = sorted(set(diagnostics["abstained"]))
