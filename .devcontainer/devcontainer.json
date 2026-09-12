@@ -1,0 +1,21 @@
+{
+  "name": "Hunter Workstation",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "postCreateCommand": "python -m pip install --upgrade pip && pip install -r hunter_workstation/requirements.txt",
+  "postStartCommand": "bash hunter_workstation/start.sh",
+  "postAttachCommand": "bash hunter_workstation/start.sh",
+  "forwardPorts": [8501],
+  "portsAttributes": {
+    "8501": {
+      "label": "Hunter Workstation",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      }
+    }
+  }
+}

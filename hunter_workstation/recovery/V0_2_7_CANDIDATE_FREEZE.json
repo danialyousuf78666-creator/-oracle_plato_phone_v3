@@ -1,0 +1,95 @@
+{
+  "schema": "observatory_candidate_freeze_v1",
+  "project": "Multi-Signal Environmental Intelligence Project",
+  "project_separation": "Standalone; unrelated to PLATO",
+  "candidate_version": "0.2.7",
+  "frozen_at_utc": "2026-08-17T21:08:16Z",
+  "architecture_invariant": {
+    "specialists": [
+      "M1_VISUAL",
+      "M2_MOTION",
+      "M3_FREQUENCY",
+      "M4_OPTICAL",
+      "M5_GEOMETRY",
+      "M6_ACOUSTIC",
+      "M7_RESONANCE",
+      "M8_ANOMALY",
+      "M9_PROPAGATION",
+      "M10_RELATIONSHIP",
+      "M11_CHALLENGER"
+    ],
+    "head_role": "router_collector_translator_only",
+    "m12_added": false
+  },
+  "source_tree": {
+    "path_at_freeze": "/workspace/scratch/e7bed727a6fb/work/observatory_v0_2_6/eleven_specialist_long_video_v0_2_6",
+    "deterministic_tree_hash_method": "SHA-256 of sorted sha256sum lines, excluding .venv, .pytest_cache, __pycache__, and *.pyc",
+    "sha256": "c77f4cdb033e6e639e75d269cfd649a68091fa59c63bf08db165d5475e6d082c",
+    "critical_file_sha256": {
+      "head.py": "1c945f18a0fcf0205003be76e137134820d3c63eb51b67115a28a12eec09bfba",
+      "long_video_collector.py": "00faa5e16dce415aafed4ffc7277f23c6c0b23e44904ad908390e175071d07a2",
+      "main.py": "c704e72f5bbcd5ef5fa0157d1394704fab36d75c37eda1bf2c355b83b90e949c",
+      "signal_utils.py": "e1ed87f8f405f3af4ed77e218d88231195efc7958b7eff4e642958782a69f39a",
+      "signature_store.py": "4476637345f1e0cdabb56e296c90c550bcf60b2b1a48afbcab283d7d4461c3a3",
+      "specialists.py": "957bcab9dcd8a135e230aeb7de0a44dd254199d8a48b4cd151e1eec3fe097299"
+    }
+  },
+  "baseline_artifacts": {
+    "v0_2_6_source_zip_sha256": "93ca6d7bf167ed233dbab266b44e1c70546477649410767a0136a79a8a933dbb",
+    "first_long_video_results_zip_sha256": "dba0db9bc22ad0700ac0e18c94efc910cf6f2ddc989b4d1247db6f811e8bcd33"
+  },
+  "corpus": {
+    "manifest_sha256": "060fed0142f26204b0c996ead54da7c9e8bc83e574547e47eec2286be87c1579",
+    "preflight_sha256": "ece9b656d4c462ef9cd87c0e36fc55282e024544196d247fd94679755f61b6fa",
+    "development_and_challenge_videos": 8,
+    "sealed_holdouts": [
+      {
+        "filename": "14c423b2-2d98-4587-8e10-56b2952373be.mp4",
+        "sha256": "224a10b8e0278c58cccfee76fd5ee81314c727799cf5f9c70ba6f7757d711d2f",
+        "status_at_freeze": "unopened_unviewed_undecoded_unanalyzed"
+      },
+      {
+        "filename": "8d93376d-ae45-49de-8a93-6b3441c76bba.mp4",
+        "sha256": "300a1f39990cb3c2156fd428c4631d9b875789202010c7a1cf52bee590401a38",
+        "status_at_freeze": "unopened_unviewed_undecoded_unanalyzed"
+      }
+    ]
+  },
+  "gates_completed_before_freeze": {
+    "baseline_tests": "15 passed",
+    "v0_2_7_full_tests": "28 passed",
+    "python_compile": "passed",
+    "synthetic_lab": {
+      "cases_completed": 10,
+      "lab_summary_sha256": "463bbcada4d18f19ba16f93f0f84db4cc5cbe8c570c1e300658ebab4b7a4e527"
+    },
+    "non_holdout_replay": {
+      "videos": 8,
+      "screen_windows_completed": 23,
+      "deep_windows_completed": 16,
+      "failed_windows": 0,
+      "m7_reciprocal_window_false_accepts": 0,
+      "screen_deep_comparisons": 16
+    },
+    "manual_range_replay": {
+      "source_duration_s": 14.391678,
+      "chunks_completed": 2,
+      "failures": 0,
+      "boundary_tags_verified": true
+    }
+  },
+  "holdout_gate": {
+    "authorized_after_this_freeze": true,
+    "policy": "Run the frozen code and fixed collector configuration without tuning on holdout observations.",
+    "fixed_configuration": {
+      "interval_seconds": 60.0,
+      "screen_seconds": 4.0,
+      "deep_seconds": 12.0,
+      "escalate_top": 2,
+      "analysis_fps": 12.5,
+      "max_analysis_dimension": 640,
+      "motion_backend": "farneback"
+    }
+  },
+  "claim_boundary": "This freeze establishes software and replay behavior, not calibrated physical truth, resonance, propagation, or extraordinary phenomena."
+}
